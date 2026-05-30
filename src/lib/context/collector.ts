@@ -261,22 +261,3 @@ async function fetchLanguageConfigs(
 
   return configs;
 }
-
-/**
- * Log context collection statistics.
- */
-export function logContextStats(ctx: CollectedContext): void {
-  console.log('=== Context Collection Stats ===');
-  console.log(`  PR: #${ctx.prInfo.number} - ${ctx.prInfo.title}`);
-  console.log(`  Files changed: ${ctx.fileChanges.length}`);
-  console.log(`  Commits: ${ctx.commits.length}`);
-  console.log(`  Diff size: ${(ctx.diff.length / 1024).toFixed(1)} KB`);
-  console.log(`  Files with full context: ${ctx.filesWithContext.filter(f => f.surroundingContext.length > 0).length}`);
-  console.log(`  Dependency edges: ${ctx.dependencyGraph?.edges.length || 0}`);
-  console.log(`  External dependents: ${ctx.dependencyGraph?.externalDependents.length || 0}`);
-  console.log(`  PR comments: ${ctx.prComments.length}`);
-  console.log(`  Language configs: ${Object.keys(ctx.languageConfigs).length}`);
-  console.log(`  Related files (RAG): ${ctx.relatedFiles.length}`);
-  console.log(`  Estimated total tokens: ${estimateTokens(JSON.stringify(ctx))}`);
-  console.log('================================');
-}

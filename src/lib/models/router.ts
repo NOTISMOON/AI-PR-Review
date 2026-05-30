@@ -166,20 +166,6 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
 }
 
 /**
- * Estimate cost for an analysis.
- */
-export function estimateCost(
-  model: ModelConfig,
-  estimatedInputTokens: number,
-  estimatedOutputTokens: number
-): number {
-  return (
-    (estimatedInputTokens / 1_000_000) * model.costPer1MInput +
-    (estimatedOutputTokens / 1_000_000) * model.costPer1MOutput
-  );
-}
-
-/**
  * Build routing context from PR analysis parameters.
  */
 export function buildRoutingContext(params: {

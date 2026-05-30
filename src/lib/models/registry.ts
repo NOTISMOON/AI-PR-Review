@@ -157,10 +157,3 @@ export function getModel(modelId: string): ModelConfig | null {
   const model = MODEL_REGISTRY[modelId];
   return model?.available ? model : null;
 }
-
-/**
- * Check if any model is available at all.
- */
-export function hasAnyModel(): boolean {
-  return getAvailableModels().length > 0;
-}

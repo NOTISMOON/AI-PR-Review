@@ -121,14 +121,5 @@ export class MemoryCache<T = unknown> {
 
 // ─── Application-specific cache instances ─────────────────────────────
 
-export interface GitHubCacheEntry {
-  data: unknown;
-  etag?: string;
-  lastModified?: string;
-}
-
-/** Cache for GitHub API responses (5 min TTL) */
-export const githubCache = new MemoryCache<GitHubCacheEntry>(200, 5 * 60 * 1000);
-
 /** Cache for AI analysis results (24 hour TTL) */
 export const analysisCache = new MemoryCache<unknown>(100, 24 * 60 * 60 * 1000);

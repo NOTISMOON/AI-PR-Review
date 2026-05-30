@@ -119,16 +119,3 @@ export function prioritizeFiles(fileChanges: FileChange[]): FilePriority[] {
 
   return scored;
 }
-
-/**
- * Get the top-N most important files, with a minimum budget share threshold.
- */
-export function getTopFiles(
-  priorities: FilePriority[],
-  topN: number,
-  minBudgetShare: number = 0.01,
-): FilePriority[] {
-  return priorities
-    .filter((p) => p.budgetShare >= minBudgetShare)
-    .slice(0, topN);
-}
