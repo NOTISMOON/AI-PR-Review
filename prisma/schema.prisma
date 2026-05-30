@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AnalysisStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AnalysisDepth {
+  FAST
+  STANDARD
+  DEEP
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReviewCommentType {
+  POSITIVE
+  SUGGESTION
+  CONCERN
+}
+
+enum FileChangeStatus {
+  ADDED
+  MODIFIED
+  DELETED
+}
+
+enum RelatedFileRelevance {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model Repository {
+  id            String        @id @default(cuid())
+  owner         String
+  name          String
+  fullName      String
+  defaultBranch String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  pullRequests  PullRequest[]
+
+  @@unique([owner, name])
+}
+
+model PullRequest {
+  id           String        @id @default(cuid())
+  repositoryId String
+  number       Int
+  title        String
+  author       String
+  branch       String
+  baseBranch   String
+  body         String        @default("")
+  headSha      String
+  filesChanged Int
+  additions    Int
+  deletions    Int
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  repository   Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  analysisRuns AnalysisRun[]
+
+  @@unique([repositoryId, number, headSha])
+  @@index([repositoryId, number])
+}
+
+model AnalysisRun {
+  id             String                  @id @default(cuid())
+  pullRequestId  String
+  cacheKey       String                  @unique
+  status         AnalysisStatus
+  depth          AnalysisDepth
+  summary        String?
+  riskLevel      RiskLevel?
+  modelUsed      String?
+  provider       String?
+  estimatedCost  Decimal?                @db.Decimal(10, 6)
+  latencyMs      Int?
+  inputTokens    Int?
+  outputTokens   Int?
+  errorCode      String?
+  errorMessage   String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  completedAt    DateTime?
+  pullRequest    PullRequest             @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  risks          AnalysisRisk[]
+  reviewComments AnalysisReviewComment[]
+  fileChanges    AnalysisFileChange[]
+  contextSnapshot AnalysisContextSnapshot?
+
+  @@index([pullRequestId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AnalysisRisk {
+  id                   String       @id @default(cuid())
+  analysisRunId        String
+  externalId           String
+  severity             RiskSeverity
+  title                String
+  description          String
+  file                 String
+  line                 Int
+  code                 String
+  suggestion           String
+  confidence           String
+  confidenceRationale  String?
+  category             String?
+  createdAt            DateTime     @default(now())
+  analysisRun          AnalysisRun  @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+
+  @@index([analysisRunId, severity])
+  @@index([file, line])
+}
+
+model AnalysisReviewComment {
+  id            String            @id @default(cuid())
+  analysisRunId String
+  externalId    String
+  type          ReviewCommentType
+  comment       String
+  createdAt     DateTime          @default(now())
+  analysisRun   AnalysisRun       @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+
+  @@index([analysisRunId])
+}
+
+model AnalysisFileChange {
+  id            String           @id @default(cuid())
+  analysisRunId String
+  file          String
+  additions     Int
+  deletions     Int
+  status        FileChangeStatus
+  blobUrl       String?
+  rawUrl        String?
+  createdAt     DateTime         @default(now())
+  analysisRun   AnalysisRun      @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+
+  @@index([analysisRunId, file])
+}
+
+model AnalysisContextSnapshot {
+  id               String       @id @default(cuid())
+  analysisRunId    String       @unique
+  diff             String
+  diffTruncated    Boolean      @default(false)
+  commits          Json
+  prComments       Json
+  repoStructure    Json
+  languageConfigs  Json
+  dependencyGraph  Json?
+  relatedFiles     Json
+  filesWithContext Json
+  createdAt        DateTime     @default(now())
+  analysisRun      AnalysisRun  @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+}
