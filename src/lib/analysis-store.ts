@@ -370,12 +370,15 @@ export async function completeAnalysisRun(params: {
 }) {
   const { analysisRunId, data, contextSnapshot } = params;
 
-  await prisma.$transaction([
+  // 顺序执行而非事务，避免 P2028 事务超时
+  await Promise.all([
     prisma.analysisRisk.deleteMany({ where: { analysisRunId } }),
     prisma.analysisReviewComment.deleteMany({ where: { analysisRunId } }),
     prisma.analysisFileChange.deleteMany({ where: { analysisRunId } }),
     prisma.analysisContextSnapshot.deleteMany({ where: { analysisRunId } }),
-    prisma.analysisRun.update({
+  ]);
+
+  await prisma.analysisRun.update({
       where: { id: analysisRunId },
       data: {
         status: AnalysisStatus.SUCCEEDED,
@@ -434,8 +437,7 @@ export async function completeAnalysisRun(params: {
           },
         },
       },
-    }),
-  ]);
+    })
 }
 
 export async function failAnalysisRun(params: {
