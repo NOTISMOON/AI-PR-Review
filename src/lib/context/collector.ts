@@ -55,36 +55,25 @@ export async function collectContext(
 ): Promise<CollectedContext> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  // ═══ Phase 1: Fetch PR data (parallel) ═══
-  const [prInfo, fileChanges, diff, commits] = await Promise.all([
-    fetchPRInfo(owner, repo, prNumber),
+  // ═══ Phase 1: Fetch PR data and repo structure (all parallel) ═══
+  const prInfoPromise = fetchPRInfo(owner, repo, prNumber);
+
+  const [prInfo, fileChanges, diff, commits, repoStructure, prComments] = await Promise.all([
+    prInfoPromise,
     fetchPRFiles(owner, repo, prNumber),
     fetchPRDiff(owner, repo, prNumber),
     fetchPRCommits(owner, repo, prNumber),
+    // Fetch repo structure in parallel using prInfo promise
+    prInfoPromise.then((info) =>
+      fetchRepoTree(owner, repo, info.baseBranch).then((tree) => tree.map((item) => item.path))
+    ),
+    opts.includePRComments ? fetchPRComments(owner, repo, prNumber) : Promise.resolve([]),
   ]);
 
-  // ═══ Phase 2: Optional context (parallel where possible) ═══
-  const optionalFetches: Promise<any>[] = [];
-
-  // Repo structure
-  const repoStructurePromise = fetchRepoTree(owner, repo, prInfo.baseBranch)
-    .then((tree) => tree.map((item) => item.path));
-
-  // PR comments
-  const commentsPromise = opts.includePRComments
-    ? fetchPRComments(owner, repo, prNumber)
-    : Promise.resolve([]);
-
-  // Language configs
-  const configsPromise = opts.includeLanguageConfigs
-    ? fetchLanguageConfigs(owner, repo, prInfo.headSha, fileChanges)
-    : Promise.resolve({});
-
-  const [repoStructure, prComments, languageConfigs] = await Promise.all([
-    repoStructurePromise,
-    commentsPromise,
-    configsPromise,
-  ]);
+  // ═══ Phase 2: Language configs ═══
+  const languageConfigs = opts.includeLanguageConfigs
+    ? await fetchLanguageConfigs(owner, repo, prInfo.headSha, fileChanges)
+    : {};
 
   // ═══ Phase 3: File-level context extraction ═══
   let filesWithContext: FileWithContext[] = [];
