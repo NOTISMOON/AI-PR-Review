@@ -6,6 +6,9 @@ export function parsePRUrl(prUrl: string): { owner: string; repo: string; prNumb
 
 const GITHUB_API_BASE = 'https://api.github.com';
 
+// File content cache to avoid duplicate fetches
+const fileContentCache = new Map<string, Promise<string | null>>();
+
 function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
@@ -128,6 +131,7 @@ export async function fetchPRCommits(owner: string, repo: string, prNumber: numb
 /**
  * Fetch full file content at a specific Git ref.
  * Used to get surrounding code context beyond the diff hunks.
+ * Cached to avoid duplicate requests for the same file.
  */
 export async function fetchFileContent(
   owner: string,
@@ -135,27 +139,46 @@ export async function fetchFileContent(
   path: string,
   ref: string,
 ): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${ref}`,
-      { headers: getAuthHeaders() },
-    );
+  const cacheKey = `${owner}/${repo}/${path}@${ref}`;
 
-    if (!res.ok) {
-      // File might be too large (>1MB) or deleted; gracefully return null
-      if (res.status === 404 || res.status === 403) return null;
-      handleGitHubError(res, `Failed to fetch file: ${path}`);
-    }
-
-    const data = await res.json();
-    // GitHub returns base64-encoded content
-    if (data.content && data.encoding === 'base64') {
-      return Buffer.from(data.content, 'base64').toString('utf-8');
-    }
-    return null;
-  } catch {
-    return null;
+  // Return cached promise if exists
+  if (fileContentCache.has(cacheKey)) {
+    return fileContentCache.get(cacheKey)!;
   }
+
+  // Create and cache the promise
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(
+        `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${ref}`,
+        { headers: getAuthHeaders() },
+      );
+
+      if (!res.ok) {
+        // File might be too large (>1MB) or deleted; gracefully return null
+        if (res.status === 404 || res.status === 403) return null;
+        handleGitHubError(res, `Failed to fetch file: ${path}`);
+      }
+
+      const data = await res.json();
+      // GitHub returns base64-encoded content
+      if (data.content && data.encoding === 'base64') {
+        return Buffer.from(data.content, 'base64').toString('utf-8');
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  })();
+
+  fileContentCache.set(cacheKey, fetchPromise);
+
+  // Clean up cache after 5 minutes to prevent memory leak
+  setTimeout(() => {
+    fileContentCache.delete(cacheKey);
+  }, 5 * 60 * 1000);
+
+  return fetchPromise;
 }
 
 /**

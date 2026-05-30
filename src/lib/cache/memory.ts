@@ -121,5 +121,5 @@ export class MemoryCache<T = unknown> {
 
 // ─── Application-specific cache instances ─────────────────────────────
 
-/** Cache for AI analysis results (24 hour TTL) */
-export const analysisCache = new MemoryCache<unknown>(100, 24 * 60 * 60 * 1000);
+/** Cache for AI analysis results (1 hour TTL, smaller size) */
+export const analysisCache = new MemoryCache<unknown>(50, 60 * 60 * 1000);
