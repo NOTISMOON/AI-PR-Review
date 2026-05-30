@@ -68,9 +68,16 @@ export default function HistoryPage({
 
   const hasEntries = entries.length > 0;
   const summary = useMemo(() => {
+    let highRisk = 0;
+    for (const entry of entries) {
+      if (entry.data.riskLevel === 'high') {
+        highRisk++;
+      }
+    }
+
     return {
       total: entries.length,
-      highRisk: entries.filter((entry) => entry.data.riskLevel === 'high').length,
+      highRisk,
       latest: entries[0]?.savedAt,
     };
   }, [entries]);

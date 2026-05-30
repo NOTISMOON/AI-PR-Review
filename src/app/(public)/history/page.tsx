@@ -22,18 +22,14 @@ export default function HistoryRoutePage() {
     setEntries(loadLocalHistory());
   }, []);
 
-  const refreshEntries = () => {
-    setEntries(loadLocalHistory());
-  };
-
   const handleDelete = (analysisRunId: string) => {
     removeLocalHistoryEntry(analysisRunId);
-    refreshEntries();
+    setEntries((prev) => prev.filter((e) => e.analysisRunId !== analysisRunId));
   };
 
   const handleClear = () => {
     clearLocalHistory();
-    refreshEntries();
+    setEntries([]);
   };
 
   const handleOpen = (entry: LocalAnalysisHistoryEntry) => {
@@ -60,13 +56,14 @@ export default function HistoryRoutePage() {
 
       const analysis = data as AnalysisResponse;
       if (analysis.analysisRunId) {
-        saveLocalHistoryEntry({
+        const newEntry = {
           analysisRunId: analysis.analysisRunId,
           prUrl: analysis.prUrl ?? entry.prUrl,
           savedAt: analysis.analyzedAt ?? new Date().toISOString(),
           data: analysis,
-        });
-        refreshEntries();
+        };
+        saveLocalHistoryEntry(newEntry);
+        setEntries((prev) => [newEntry, ...prev.filter((e) => e.analysisRunId !== newEntry.analysisRunId)]);
         router.push(`/analysis/${analysis.analysisRunId}`);
       }
     } catch (error) {
