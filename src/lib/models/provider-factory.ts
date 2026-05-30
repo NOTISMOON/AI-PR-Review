@@ -26,24 +26,3 @@ export function getProviderForModel(model: ModelConfig): ModelProvider {
   }
   return provider;
 }
-
-/**
- * Get a provider by name.
- */
-export function getProvider(name: string): ModelProvider | null {
-  return providerMap[name] || null;
-}
-
-/**
- * List all registered providers (regardless of availability).
- */
-export function listProviders(): ModelProvider[] {
-  return Object.values(providerMap);
-}
-
-/**
- * List available providers.
- */
-export function listAvailableProviders(): ModelProvider[] {
-  return Object.values(providerMap).filter((p) => p.isAvailable());
-}

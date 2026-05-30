@@ -170,8 +170,6 @@ export interface AnalyzeError {
     | 'INTERNAL_ERROR';
 }
 
-export type SSEEventType = 'progress' | 'partial' | 'complete' | 'error';
-
 export interface SSEProgressEvent {
   type: 'progress';
   phase: 'fetching' | 'analyzing' | 'validating';
@@ -212,15 +210,6 @@ export interface FeedbackEntry {
   userComment?: string;
   correctedSeverity?: string;
   timestamp: string;
-}
-
-export interface UserSettings {
-  preferredModel?: string;
-  depth: 'fast' | 'standard' | 'deep';
-  outputLanguage: 'zh' | 'en';
-  strictness: 'lenient' | 'balanced' | 'strict';
-  ignorePatterns: string[];
-  ensembleMode: boolean;
 }
 
 export interface LocalAnalysisHistoryEntry {

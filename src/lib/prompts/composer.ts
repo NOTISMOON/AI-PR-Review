@@ -114,11 +114,3 @@ export function createPromptConfig(
       };
   }
 }
-
-/**
- * Estimate the token count of a composed prompt.
- */
-export function estimatePromptTokens(prompt: string): number {
-  // Rough heuristic: ~1 token per 3-4 characters for mixed Chinese/English
-  return Math.ceil(prompt.length / 3.2);
-}

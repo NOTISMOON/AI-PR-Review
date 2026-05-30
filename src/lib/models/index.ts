@@ -18,23 +18,13 @@ export {
   getModelsByTier,
   getBestAvailableModel,
   getModel,
-  hasAnyModel,
 } from './registry';
 
 export {
   routeModel,
-  estimateCost,
   buildRoutingContext,
 } from './router';
 
 export {
   getProviderForModel,
-  getProvider,
-  listProviders,
-  listAvailableProviders,
 } from './provider-factory';
-
-// Re-export providers for direct use
-export { deepseekProvider } from './providers/deepseek';
-export { openaiProvider } from './providers/openai';
-export { anthropicProvider } from './providers/anthropic';

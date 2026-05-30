@@ -2,5 +2,4 @@
  * Cache module — barrel export.
  */
 
-export { MemoryCache, githubCache, analysisCache } from './memory';
-export type { GitHubCacheEntry } from './memory';
+export { MemoryCache, analysisCache } from './memory';
