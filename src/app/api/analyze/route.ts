@@ -87,8 +87,7 @@ export async function POST(request: NextRequest) {
 
     const decision = routeModel(routingCtx);
     const provider = getProviderForModel(decision.model);
-    const diffTruncated = collected.diff.length > 240000;
-    const effectiveDiff = diffTruncated ? collected.diff.slice(0, 240000) : collected.diff;
+    const { effectiveDiff, diffTruncated } = truncateDiffSmart(collected.diff, 240000);
     const promptConfig = createPromptConfig(depth, collected.fileChanges, diffTruncated);
     const systemPrompt = composeSystemPrompt(promptConfig);
     const { userMessage } = await buildUserMessage(collected, effectiveDiff, diffTruncated);
@@ -248,6 +247,31 @@ async function collectByDepth(owner: string, repo: string, prNumber: number, dep
 
 function buildCacheKey(owner: string, repo: string, prNumber: number, headSha: string, depth: AnalysisDepth) {
   return `analysis:${owner}:${repo}:${prNumber}:${headSha}:${depth}`;
+}
+
+/**
+ * Smart diff truncation - preserves complete file blocks
+ */
+function truncateDiffSmart(diff: string, maxSize: number): { effectiveDiff: string; diffTruncated: boolean } {
+  if (diff.length <= maxSize) {
+    return { effectiveDiff: diff, diffTruncated: false };
+  }
+
+  // Find the last complete diff block before maxSize
+  const lastFileHeader = diff.lastIndexOf('\ndiff --git', maxSize);
+
+  if (lastFileHeader > 0) {
+    return {
+      effectiveDiff: diff.slice(0, lastFileHeader) + '\n\n... (remaining files truncated)',
+      diffTruncated: true,
+    };
+  }
+
+  // Fallback: simple truncation
+  return {
+    effectiveDiff: diff.slice(0, maxSize) + '\n\n... (truncated)',
+    diffTruncated: true,
+  };
 }
 
 function buildContextSnapshot(collected: CollectedContext, diffTruncated: boolean) {
