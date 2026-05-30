@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import React, { useState, type ReactNode } from 'react';
 import {
   Brain,
   Clock,
@@ -59,6 +59,43 @@ const depthOptions: { value: AnalysisDepth; label: string; icon: ReactNode; desc
 ];
 
 export { type AnalysisDepth, depthOptions };
+
+interface DepthOptionProps {
+  option: typeof depthOptions[number];
+  isSelected: boolean;
+  onSelect: (value: AnalysisDepth) => void;
+  disabled: boolean;
+}
+
+const DepthOption = React.memo(({ option, isSelected, onSelect, disabled }: DepthOptionProps) => {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(option.value)}
+      disabled={disabled}
+      className={`rounded-lg border-2 p-3 text-left transition-all ${
+        isSelected
+          ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+          : 'border-slate-200 bg-white hover:border-slate-300'
+      }`}
+    >
+      <div className="mb-1 flex items-center gap-1.5">
+        {option.icon}
+        <span
+          className={`text-sm font-semibold ${
+            isSelected ? 'text-emerald-700' : 'text-slate-700'
+          }`}
+        >
+          {option.label}
+        </span>
+      </div>
+      <p className="mb-1.5 text-xs text-slate-500">{option.desc}</p>
+      <Chip label={option.time} size="small" sx={{ fontSize: '10px', height: '20px' }} />
+    </button>
+  );
+});
+
+DepthOption.displayName = 'DepthOption';
 
 export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading, initialPrUrl, initialDepth }: PRAnalyzerProps) {
   const [prUrl, setPrUrl] = useState(initialPrUrl ?? '');
@@ -134,30 +171,13 @@ export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading, initialP
                 </p>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   {depthOptions.map((option) => (
-                    <button
+                    <DepthOption
                       key={option.value}
-                      type="button"
-                      onClick={() => setDepth(option.value)}
+                      option={option}
+                      isSelected={depth === option.value}
+                      onSelect={setDepth}
                       disabled={loading}
-                      className={`rounded-lg border-2 p-3 text-left transition-all ${
-                        depth === option.value
-                          ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="mb-1 flex items-center gap-1.5">
-                        {option.icon}
-                        <span
-                          className={`text-sm font-semibold ${
-                            depth === option.value ? 'text-emerald-700' : 'text-slate-700'
-                          }`}
-                        >
-                          {option.label}
-                        </span>
-                      </div>
-                      <p className="mb-1.5 text-xs text-slate-500">{option.desc}</p>
-                      <Chip label={option.time} size="small" sx={{ fontSize: '10px', height: '20px' }} />
-                    </button>
+                    />
                   ))}
                 </div>
               </div>

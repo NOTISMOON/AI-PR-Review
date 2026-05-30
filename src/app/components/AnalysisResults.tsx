@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -8,18 +9,17 @@ import {
   ChevronRight,
   Clock,
   DollarSign,
+  ExternalLink,
   FileCode,
   GitBranch,
   Info,
   MessageSquare,
-  ThumbsDown,
-  ThumbsUp,
   XCircle,
   Zap,
 } from 'lucide-react';
 import { Alert, AlertTitle, Card, CardContent, Chip } from '@mui/material';
 import { useState } from 'react';
-import type { AnalysisResponse, FeedbackEntry, Risk } from '@/types/analysis';
+import type { AnalysisResponse, Risk } from '@/types/analysis';
 
 interface AnalysisResultsProps {
   data: AnalysisResponse;
@@ -27,9 +27,8 @@ interface AnalysisResultsProps {
   onShowHistory?: () => void;
 }
 
-export default function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) {
+function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) {
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Record<string, 'accurate' | 'inaccurate'>>({});
   const [expandedRisks, setExpandedRisks] = useState<Set<string>>(new Set());
 
   const toggleRiskExpand = (riskId: string) => {
@@ -42,27 +41,6 @@ export default function AnalysisResults({ data, onBack, onShowHistory }: Analysi
       }
       return next;
     });
-  };
-
-  const handleFeedback = (riskId: string, rating: 'accurate' | 'inaccurate') => {
-    setFeedback((prev) => ({
-      ...prev,
-      [riskId]: prev[riskId] === rating ? undefined as never : rating,
-    }));
-
-    try {
-      const entry: FeedbackEntry = {
-        riskId,
-        prUrl: `${data.prInfo.title} (#${data.prInfo.number})`,
-        rating: rating === 'inaccurate' ? 'inaccurate' : 'accurate',
-        timestamp: new Date().toISOString(),
-      };
-      const existing = JSON.parse(localStorage.getItem('ai-review-feedback') || '[]');
-      existing.push(entry);
-      localStorage.setItem('ai-review-feedback', JSON.stringify(existing.slice(-100)));
-    } catch {
-      // Ignore localStorage access errors in non-browser contexts.
-    }
   };
 
   const getRiskColor = (level: string) => {
@@ -309,38 +287,14 @@ export default function AnalysisResults({ data, onBack, onShowHistory }: Analysi
                               {getConfidenceLabel(risk.confidence)}
                             </span>
                           </div>
-
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleFeedback(risk.id, 'accurate')}
-                              className={`rounded p-1 transition-colors ${
-                                feedback[risk.id] === 'accurate'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'text-slate-400 hover:bg-green-50 hover:text-green-600'
-                              }`}
-                              title="标记为准确"
-                            >
-                              <ThumbsUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleFeedback(risk.id, 'inaccurate')}
-                              className={`rounded p-1 transition-colors ${
-                                feedback[risk.id] === 'inaccurate'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
-                              }`}
-                              title="标记为误报"
-                            >
-                              <ThumbsDown className="h-4 w-4" />
-                            </button>
-                          </div>
                         </div>
 
                         <h3 className="mb-1 font-semibold text-slate-800">{risk.title}</h3>
                         <p className="mb-2 text-sm text-slate-700">{risk.description}</p>
 
-                        {risk.confidence === 'low' && risk.confidenceRationale && (
-                          <div className="mb-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                        {risk.confidenceRationale && (
+                          <div className="mb-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                            <span className="font-semibold">置信度说明: </span>
                             {risk.confidenceRationale}
                           </div>
                         )}
@@ -353,9 +307,15 @@ export default function AnalysisResults({ data, onBack, onShowHistory }: Analysi
                             <span>
                               {risk.file}:{risk.line}
                             </span>
-                            <span className="text-xs">{expandedRisks.has(risk.id) ? '收起' : '展开'}</span>
+                            {expandedRisks.has(risk.id) ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
                           </div>
-                          <pre className="overflow-x-auto whitespace-pre-wrap">{risk.code}</pre>
+                          {expandedRisks.has(risk.id) && (
+                            <pre className="overflow-x-auto whitespace-pre-wrap">{risk.code}</pre>
+                          )}
                         </div>
 
                         <div className="rounded border border-slate-300 bg-white/70 p-3">
@@ -403,23 +363,41 @@ export default function AnalysisResults({ data, onBack, onShowHistory }: Analysi
                   {data.fileChanges.map((file) => (
                     <div
                       key={file.file}
-                      className="cursor-pointer rounded-lg bg-slate-50 p-3 transition-colors hover:bg-slate-100"
-                      onClick={() => setExpandedFile(expandedFile === file.file ? null : file.file)}
+                      className="rounded-lg bg-slate-50 p-3 transition-colors hover:bg-slate-100"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
-                          {expandedFile === file.file ? (
-                            <ChevronDown className="h-4 w-4 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 shrink-0" />
-                          )}
+                          <button
+                            onClick={() => setExpandedFile(expandedFile === file.file ? null : file.file)}
+                            className="shrink-0"
+                          >
+                            {expandedFile === file.file ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
                           <span className="truncate font-mono text-sm text-slate-700">{file.file.split('/').pop()}</span>
                         </div>
-                        <Chip
-                          label={file.status === 'added' ? '新增' : file.status === 'modified' ? '修改' : '删除'}
-                          size="small"
-                          color={file.status === 'added' ? 'success' : file.status === 'deleted' ? 'error' : 'default'}
-                        />
+                        <div className="flex items-center gap-2">
+                          <Chip
+                            label={file.status === 'added' ? '新增' : file.status === 'modified' ? '修改' : '删除'}
+                            size="small"
+                            color={file.status === 'added' ? 'success' : file.status === 'deleted' ? 'error' : 'default'}
+                          />
+                          {file.blobUrl && (
+                            <a
+                              href={file.blobUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-slate-400 transition-colors hover:text-emerald-600"
+                              title="在 GitHub 中查看"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          )}
+                        </div>
                       </div>
                       {expandedFile === file.file && (
                         <div className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-600">
@@ -441,3 +419,8 @@ export default function AnalysisResults({ data, onBack, onShowHistory }: Analysi
     </div>
   );
 }
+
+export default React.memo(AnalysisResults, (prevProps, nextProps) => {
+  // Only re-render if analysisRunId changes
+  return prevProps.data.analysisRunId === nextProps.data.analysisRunId;
+});
