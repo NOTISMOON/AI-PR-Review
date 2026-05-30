@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { useRouter } from 'next/navigation';
 import { Alert, Snackbar } from '@mui/material';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import PRAnalyzer from '../components/PRAnalyzer';
-import AnalysisResults from '../components/AnalysisResults';
-import type { AnalysisData, AnalyzeRequest } from '../../types/analysis';
+import { buildLocalHistoryEntry, saveLocalHistoryEntry } from '@/lib/local-history';
+import type { AnalyzeRequest, AnalysisResponse } from '@/types/analysis';
 
 const theme = createTheme({
   palette: {
@@ -22,8 +23,8 @@ const theme = createTheme({
 });
 
 export default function App() {
+  const router = useRouter();
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async (prUrl: string, options?: Partial<AnalyzeRequest>) => {
@@ -38,12 +39,17 @@ export default function App() {
       });
 
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.error || `分析失败 (${response.status})`);
       }
 
-      setAnalysisData(data as AnalysisData);
+      const analysis = data as AnalysisResponse;
+      if (!analysis.analysisRunId) {
+        throw new Error('分析结果未返回记录 ID');
+      }
+
+      saveLocalHistoryEntry(buildLocalHistoryEntry(analysis));
+      router.push(`/analysis/${analysis.analysisRunId}`);
     } catch (err: any) {
       setError(err.message || '分析过程中出现未知错误，请稍后重试');
     } finally {
@@ -51,19 +57,14 @@ export default function App() {
     }
   };
 
-  const handleBack = () => {
-    setAnalysisData(null);
-    setError(null);
-  };
-
   return (
     <ThemeProvider theme={theme}>
       <div className="size-full">
-        {!analysisData ? (
-          <PRAnalyzer onAnalyze={handleAnalyze} loading={analyzing} />
-        ) : (
-          <AnalysisResults data={analysisData} onBack={handleBack} />
-        )}
+        <PRAnalyzer
+          onAnalyze={handleAnalyze}
+          onOpenHistory={() => router.push('/history')}
+          loading={analyzing}
+        />
         <Snackbar
           open={!!error}
           autoHideDuration={8000}
