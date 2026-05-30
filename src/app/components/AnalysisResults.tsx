@@ -1,23 +1,33 @@
 'use client';
 
 import {
-  AlertTriangle, CheckCircle, XCircle, FileCode,
-  GitBranch, MessageSquare, ChevronDown, ChevronRight,
-  AlertCircle, Info, ThumbsUp, ThumbsDown, Zap, Clock, DollarSign,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  DollarSign,
+  FileCode,
+  GitBranch,
+  Info,
+  MessageSquare,
+  ThumbsDown,
+  ThumbsUp,
+  XCircle,
+  Zap,
 } from 'lucide-react';
-import {
-  Card, CardContent, Chip,
-  Alert, AlertTitle,
-} from '@mui/material';
+import { Alert, AlertTitle, Card, CardContent, Chip } from '@mui/material';
 import { useState } from 'react';
-import type { AnalysisData, Risk, FeedbackEntry } from '../../types/analysis';
+import type { AnalysisResponse, FeedbackEntry, Risk } from '@/types/analysis';
 
 interface AnalysisResultsProps {
-  data: AnalysisData;
+  data: AnalysisResponse;
   onBack: () => void;
+  onShowHistory?: () => void;
 }
 
-export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) {
+export default function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) {
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, 'accurate' | 'inaccurate'>>({});
   const [expandedRisks, setExpandedRisks] = useState<Set<string>>(new Set());
@@ -25,8 +35,11 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
   const toggleRiskExpand = (riskId: string) => {
     setExpandedRisks((prev) => {
       const next = new Set(prev);
-      if (next.has(riskId)) next.delete(riskId);
-      else next.add(riskId);
+      if (next.has(riskId)) {
+        next.delete(riskId);
+      } else {
+        next.add(riskId);
+      }
       return next;
     });
   };
@@ -34,10 +47,9 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
   const handleFeedback = (riskId: string, rating: 'accurate' | 'inaccurate') => {
     setFeedback((prev) => ({
       ...prev,
-      [riskId]: prev[riskId] === rating ? undefined as any : rating,
+      [riskId]: prev[riskId] === rating ? undefined as never : rating,
     }));
 
-    // Persist feedback to localStorage
     try {
       const entry: FeedbackEntry = {
         riskId,
@@ -47,108 +59,144 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
       };
       const existing = JSON.parse(localStorage.getItem('ai-review-feedback') || '[]');
       existing.push(entry);
-      localStorage.setItem('ai-review-feedback', JSON.stringify(existing.slice(-100))); // Keep last 100
-    } catch { /* localStorage may not be available */ }
+      localStorage.setItem('ai-review-feedback', JSON.stringify(existing.slice(-100)));
+    } catch {
+      // Ignore localStorage access errors in non-browser contexts.
+    }
   };
 
   const getRiskColor = (level: string) => {
     switch (level) {
-      case 'critical': return 'error';
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'info';
-      default: return 'default';
+      case 'critical':
+      case 'high':
+        return 'error';
+      case 'medium':
+        return 'warning';
+      case 'low':
+        return 'info';
+      default:
+        return 'default';
     }
   };
 
   const getRiskBgColor = (level: string) => {
     switch (level) {
-      case 'critical': return 'bg-red-50 border-red-300';
-      case 'high': return 'bg-orange-50 border-orange-200';
-      case 'medium': return 'bg-yellow-50 border-yellow-200';
-      case 'low': return 'bg-teal-50 border-teal-200';
-      default: return 'bg-gray-50 border-gray-200';
+      case 'critical':
+        return 'bg-red-50 border-red-300';
+      case 'high':
+        return 'bg-orange-50 border-orange-200';
+      case 'medium':
+        return 'bg-yellow-50 border-yellow-200';
+      case 'low':
+        return 'bg-teal-50 border-teal-200';
+      default:
+        return 'bg-gray-50 border-gray-200';
     }
   };
 
   const getConfidenceIcon = (confidence: string) => {
     switch (confidence) {
-      case 'high': return <Zap className="w-3.5 h-3.5 text-green-600" />;
-      case 'medium': return <Info className="w-3.5 h-3.5 text-yellow-600" />;
-      case 'low': return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
+      case 'high':
+        return <Zap className="h-3.5 w-3.5 text-green-600" />;
+      case 'medium':
+        return <Info className="h-3.5 w-3.5 text-yellow-600" />;
+      default:
+        return <AlertCircle className="h-3.5 w-3.5 text-red-500" />;
     }
   };
 
   const getConfidenceLabel = (confidence: string) => {
     switch (confidence) {
-      case 'high': return '高置信度';
-      case 'medium': return '中置信度';
-      case 'low': return '低置信度·需人工复查';
+      case 'high':
+        return '高置信度';
+      case 'medium':
+        return '中置信度';
+      default:
+        return '低置信度';
     }
   };
 
   const getConfidenceColor = (confidence: string) => {
     switch (confidence) {
-      case 'high': return 'bg-green-100 text-green-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'low': return 'bg-red-100 text-red-800';
+      case 'high':
+        return 'bg-green-100 text-green-800';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-red-100 text-red-800';
     }
   };
 
   const getCategoryLabel = (category?: string) => {
     switch (category) {
-      case 'security': return '安全';
-      case 'logic': return '逻辑';
-      case 'performance': return '性能';
-      case 'quality': return '质量';
-      case 'architecture': return '架构';
-      default: return null;
+      case 'security':
+        return '安全';
+      case 'logic':
+        return '逻辑';
+      case 'performance':
+        return '性能';
+      case 'quality':
+        return '质量';
+      case 'architecture':
+        return '架构';
+      default:
+        return null;
     }
   };
 
   const getOverallRiskIcon = () => {
     switch (data.riskLevel) {
-      case 'high': return <XCircle className="w-6 h-6 text-red-600" />;
-      case 'medium': return <AlertTriangle className="w-6 h-6 text-yellow-600" />;
-      case 'low': return <CheckCircle className="w-6 h-6 text-green-600" />;
+      case 'high':
+        return <XCircle className="h-6 w-6 text-red-600" />;
+      case 'medium':
+        return <AlertTriangle className="h-6 w-6 text-yellow-600" />;
+      default:
+        return <CheckCircle className="h-6 w-6 text-green-600" />;
     }
   };
 
   const getCommentIcon = (type: string) => {
     switch (type) {
-      case 'positive': return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'suggestion': return <Info className="w-5 h-5 text-teal-600" />;
-      case 'concern': return <AlertCircle className="w-5 h-5 text-orange-600" />;
+      case 'positive':
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'suggestion':
+        return <Info className="h-5 w-5 text-teal-600" />;
+      default:
+        return <AlertCircle className="h-5 w-5 text-orange-600" />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="text-emerald-600 hover:text-emerald-800 font-medium"
-          >
-            ← 返回首页
-          </button>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="font-medium text-emerald-600 hover:text-emerald-800">
+              返回首页
+            </button>
+            {onShowHistory && (
+              <button onClick={onShowHistory} className="font-medium text-slate-500 hover:text-slate-700">
+                查看历史
+              </button>
+            )}
+          </div>
 
-          {/* Model & Performance Info */}
           {data.modelUsed && (
             <div className="flex items-center gap-4 text-xs text-slate-500">
               <span className="flex items-center gap-1">
-                <Zap className="w-3 h-3" />
+                <Zap className="h-3 w-3" />
                 {data.provider}/{data.modelUsed}
               </span>
+              {data.depth && <span>{data.depth.toUpperCase()}</span>}
               {data.latencyMs && (
                 <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
+                  <Clock className="h-3 w-3" />
                   {(data.latencyMs / 1000).toFixed(1)}s
                 </span>
               )}
               {data.estimatedCost !== undefined && (
                 <span className="flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" />
+                  <DollarSign className="h-3 w-3" />
                   ${data.estimatedCost.toFixed(4)}
                 </span>
               )}
@@ -156,24 +204,29 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
           )}
         </div>
 
-        {/* PR Info Header */}
         <Card className="mb-6 shadow-lg">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between mb-4">
+            <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-slate-800 mb-2">
-                  {data.prInfo.title}
-                </h1>
-                <div className="flex items-center gap-4 text-sm text-slate-600">
+                <h1 className="mb-2 text-2xl font-bold text-slate-800">{data.prInfo.title}</h1>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
                   <span>#{data.prInfo.number}</span>
-                  <span>•</span>
                   <span>作者: {data.prInfo.author}</span>
-                  <span>•</span>
                   <div className="flex items-center gap-1">
-                    <GitBranch className="w-4 h-4" />
+                    <GitBranch className="h-4 w-4" />
                     <span>{data.prInfo.branch}</span>
                   </div>
                 </div>
+                {data.prUrl && (
+                  <a
+                    href={data.prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block text-sm text-emerald-700 hover:text-emerald-900"
+                  >
+                    {data.prUrl}
+                  </a>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {getOverallRiskIcon()}
@@ -183,7 +236,7 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-200">
+            <div className="grid grid-cols-3 gap-4 border-t border-slate-200 pt-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-slate-800">{data.prInfo.filesChanged}</div>
                 <div className="text-sm text-slate-600">文件变更</div>
@@ -200,115 +253,113 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* AI Summary */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
             <Card className="shadow-md">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
+                <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-800">
+                  <MessageSquare className="h-5 w-5" />
                   AI 变更总结
                 </h2>
-                <p className="text-slate-700 leading-relaxed">{data.summary}</p>
+                <p className="leading-relaxed text-slate-700">{data.summary}</p>
               </CardContent>
             </Card>
 
-            {/* Risk Analysis */}
             <Card className="shadow-md">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5" />
+                <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-800">
+                  <AlertTriangle className="h-5 w-5" />
                   风险代码识别 ({data.risks.length})
                 </h2>
 
                 {data.risks.length === 0 ? (
                   <Alert severity="success">
-                    <AlertTitle>太棒了！</AlertTitle>
-                    未发现明显的风险代码。
+                    <AlertTitle>未发现明显风险</AlertTitle>
+                    这次分析没有给出明确的风险项，建议仍结合业务背景做人工复查。
                   </Alert>
                 ) : (
                   <div className="space-y-4">
                     {data.risks.map((risk: Risk) => (
                       <div
                         key={risk.id}
-                        className={`border-2 rounded-lg p-4 ${getRiskBgColor(risk.severity)} ${risk.confidence === 'low' ? 'opacity-85' : ''}`}
+                        className={`rounded-lg border-2 p-4 ${getRiskBgColor(risk.severity)} ${risk.confidence === 'low' ? 'opacity-90' : ''}`}
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2 flex-wrap">
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Chip
-                              label={risk.severity === 'critical' ? '严重' : risk.severity === 'high' ? '高' : risk.severity === 'medium' ? '中' : '低'}
+                              label={
+                                risk.severity === 'critical'
+                                  ? '严重'
+                                  : risk.severity === 'high'
+                                    ? '高'
+                                    : risk.severity === 'medium'
+                                      ? '中'
+                                      : '低'
+                              }
                               color={getRiskColor(risk.severity) as any}
                               size="small"
                             />
                             {getCategoryLabel(risk.category) && (
-                              <Chip
-                                label={getCategoryLabel(risk.category)}
-                                size="small"
-                                variant="outlined"
-                                sx={{ fontSize: '10px' }}
-                              />
+                              <Chip label={getCategoryLabel(risk.category)} size="small" variant="outlined" />
                             )}
-                            {/* Confidence badge */}
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getConfidenceColor(risk.confidence)}`}>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${getConfidenceColor(risk.confidence)}`}
+                            >
                               {getConfidenceIcon(risk.confidence)}
                               {getConfidenceLabel(risk.confidence)}
                             </span>
                           </div>
 
-                          {/* Feedback buttons */}
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleFeedback(risk.id, 'accurate')}
-                              className={`p-1 rounded transition-colors ${
+                              className={`rounded p-1 transition-colors ${
                                 feedback[risk.id] === 'accurate'
                                   ? 'bg-green-100 text-green-700'
-                                  : 'text-slate-400 hover:text-green-600 hover:bg-green-50'
+                                  : 'text-slate-400 hover:bg-green-50 hover:text-green-600'
                               }`}
                               title="标记为准确"
                             >
-                              <ThumbsUp className="w-4 h-4" />
+                              <ThumbsUp className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleFeedback(risk.id, 'inaccurate')}
-                              className={`p-1 rounded transition-colors ${
+                              className={`rounded p-1 transition-colors ${
                                 feedback[risk.id] === 'inaccurate'
                                   ? 'bg-red-100 text-red-700'
-                                  : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                  : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
                               }`}
                               title="标记为误报"
                             >
-                              <ThumbsDown className="w-4 h-4" />
+                              <ThumbsDown className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
 
-                        <h3 className="font-semibold text-slate-800 mb-1">{risk.title}</h3>
-                        <p className="text-slate-700 mb-2 text-sm">{risk.description}</p>
+                        <h3 className="mb-1 font-semibold text-slate-800">{risk.title}</h3>
+                        <p className="mb-2 text-sm text-slate-700">{risk.description}</p>
 
-                        {/* Confidence rationale for low-confidence findings */}
                         {risk.confidence === 'low' && risk.confidenceRationale && (
-                          <div className="mb-2 p-2 bg-red-50 rounded border border-red-200 text-xs text-red-700">
-                            ⚠️ {risk.confidenceRationale}
+                          <div className="mb-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                            {risk.confidenceRationale}
                           </div>
                         )}
 
-                        {/* Expandable code block */}
                         <div
-                          className="bg-slate-800 text-slate-100 rounded p-3 mb-3 text-sm font-mono cursor-pointer"
+                          className="mb-3 cursor-pointer rounded bg-slate-800 p-3 font-mono text-sm text-slate-100"
                           onClick={() => toggleRiskExpand(risk.id)}
                         >
-                          <div className="flex items-center justify-between text-slate-400 mb-1">
-                            <span>{risk.file}:{risk.line}</span>
-                            <span className="text-xs">
-                              {expandedRisks.has(risk.id) ? '收起' : '展开'}
+                          <div className="mb-1 flex items-center justify-between text-slate-400">
+                            <span>
+                              {risk.file}:{risk.line}
                             </span>
+                            <span className="text-xs">{expandedRisks.has(risk.id) ? '收起' : '展开'}</span>
                           </div>
-                          <pre className="overflow-x-auto">{risk.code}</pre>
+                          <pre className="overflow-x-auto whitespace-pre-wrap">{risk.code}</pre>
                         </div>
 
-                        <div className="bg-white bg-opacity-60 rounded p-3 border border-slate-300">
-                          <div className="text-sm font-semibold text-slate-700 mb-1">💡 建议修复:</div>
+                        <div className="rounded border border-slate-300 bg-white/70 p-3">
+                          <div className="mb-1 text-sm font-semibold text-slate-700">建议修复</div>
                           <div className="text-sm text-slate-700">{risk.suggestion}</div>
                         </div>
                       </div>
@@ -318,19 +369,18 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
               </CardContent>
             </Card>
 
-            {/* Review Comments */}
             <Card className="shadow-md">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5" />
+                <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-800">
+                  <CheckCircle className="h-5 w-5" />
                   AI Review 建议
                 </h2>
                 <div className="space-y-3">
                   {data.reviewComments.map((comment) => (
-                    <div key={comment.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+                    <div key={comment.id} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3">
                       {getCommentIcon(comment.type)}
                       <div>
-                        <span className="text-xs text-slate-400 uppercase">
+                        <span className="text-xs uppercase text-slate-400">
                           {comment.type === 'positive' ? '正面' : comment.type === 'suggestion' ? '建议' : '关注'}
                         </span>
                         <p className="text-slate-700">{comment.comment}</p>
@@ -342,48 +392,42 @@ export default function AnalysisResults({ data, onBack }: AnalysisResultsProps) 
             </Card>
           </div>
 
-          {/* Sidebar - File Changes */}
           <div className="lg:col-span-1">
-            <Card className="shadow-md sticky top-8">
+            <Card className="sticky top-8 shadow-md">
               <CardContent className="p-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <FileCode className="w-5 h-5" />
+                <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-800">
+                  <FileCode className="h-5 w-5" />
                   文件变更列表
                 </h2>
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="max-h-[600px] space-y-2 overflow-y-auto">
                   {data.fileChanges.map((file) => (
                     <div
                       key={file.file}
-                      className="p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                      className="cursor-pointer rounded-lg bg-slate-50 p-3 transition-colors hover:bg-slate-100"
                       onClick={() => setExpandedFile(expandedFile === file.file ? null : file.file)}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
                           {expandedFile === file.file ? (
-                            <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                            <ChevronDown className="h-4 w-4 shrink-0" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                            <ChevronRight className="h-4 w-4 shrink-0" />
                           )}
-                          <span className="text-sm font-mono text-slate-700 truncate">
-                            {file.file.split('/').pop()}
-                          </span>
+                          <span className="truncate font-mono text-sm text-slate-700">{file.file.split('/').pop()}</span>
                         </div>
                         <Chip
                           label={file.status === 'added' ? '新增' : file.status === 'modified' ? '修改' : '删除'}
                           size="small"
                           color={file.status === 'added' ? 'success' : file.status === 'deleted' ? 'error' : 'default'}
-                          sx={{ fontSize: '10px' }}
                         />
                       </div>
                       {expandedFile === file.file && (
-                        <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-600">
+                        <div className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-600">
                           <div className="flex gap-4">
                             <span className="text-green-600">+{file.additions}</span>
                             <span className="text-red-600">-{file.deletions}</span>
                           </div>
-                          <div className="mt-1 font-mono text-slate-500 break-all">
-                            {file.file}
-                          </div>
+                          <div className="mt-1 break-all font-mono text-slate-500">{file.file}</div>
                         </div>
                       )}
                     </div>
