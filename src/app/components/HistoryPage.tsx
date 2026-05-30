@@ -1,8 +1,24 @@
 'use client';
 
+import { useState } from 'react';
 import { useMemo } from 'react';
-import { ArrowLeft, Clock3, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
-import { Alert, AlertTitle, Button, Card, CardContent, Chip } from '@mui/material';
+import { ArrowLeft, Clock3, RefreshCw, ShieldAlert, Trash2, Brain, Zap, Sparkles } from 'lucide-react';
+import {
+  Alert,
+  AlertTitle,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  CircularProgress,
+} from '@mui/material';
 import type { LocalAnalysisHistoryEntry } from '@/types/analysis';
 
 interface HistoryPageProps {
@@ -11,7 +27,8 @@ interface HistoryPageProps {
   onOpen: (entry: LocalAnalysisHistoryEntry) => void;
   onDelete: (analysisRunId: string) => void;
   onClear: () => void;
-  onReanalyze: (entry: LocalAnalysisHistoryEntry) => void;
+  onReanalyze: (entry: LocalAnalysisHistoryEntry, depth: string) => void;
+  busyId?: string | null;
 }
 
 function riskLabel(level: LocalAnalysisHistoryEntry['data']['riskLevel']) {
@@ -43,7 +60,12 @@ export default function HistoryPage({
   onDelete,
   onClear,
   onReanalyze,
+  busyId,
 }: HistoryPageProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<LocalAnalysisHistoryEntry | null>(null);
+  const [selectedDepth, setSelectedDepth] = useState<string>('standard');
+
   const hasEntries = entries.length > 0;
   const summary = useMemo(() => {
     return {
@@ -52,6 +74,24 @@ export default function HistoryPage({
       latest: entries[0]?.savedAt,
     };
   }, [entries]);
+
+  const handleReanalyzeClick = (entry: LocalAnalysisHistoryEntry) => {
+    setSelectedEntry(entry);
+    setSelectedDepth(entry.data.depth ?? 'standard');
+    setDialogOpen(true);
+  };
+
+  const handleConfirmReanalyze = () => {
+    if (selectedEntry) {
+      onReanalyze(selectedEntry, selectedDepth);
+      setDialogOpen(false);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelectedEntry(null);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-100 via-white to-emerald-50 p-6 md:p-8">
@@ -139,10 +179,18 @@ export default function HistoryPage({
                       </Button>
                       <Button
                         variant="outlined"
-                        onClick={() => onReanalyze(entry)}
+                        onClick={() => handleReanalyzeClick(entry)}
                         startIcon={<RefreshCw className="h-4 w-4" />}
+                        disabled={busyId === entry.analysisRunId}
                       >
-                        重新分析
+                        {busyId === entry.analysisRunId ? (
+                          <>
+                            <CircularProgress size={16} sx={{ mr: 1 }} />
+                            分析中...
+                          </>
+                        ) : (
+                          '重新分析'
+                        )}
                       </Button>
                       <Button
                         variant="text"
@@ -160,6 +208,80 @@ export default function HistoryPage({
           </div>
         )}
       </div>
+
+      {/* 深度选择弹窗 */}
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>重新分析</DialogTitle>
+        <DialogContent>
+          {selectedEntry && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-slate-600">PR: {selectedEntry.data.prInfo.title}</p>
+                <p className="text-xs text-slate-500">#{selectedEntry.data.prInfo.number}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  上次分析: {selectedEntry.data.depth ?? 'standard'} (
+                  {selectedEntry.data.depth === 'fast' ? '~5秒' : selectedEntry.data.depth === 'deep' ? '~30秒' : '~15秒'})
+                </p>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">选择分析深度:</p>
+                <RadioGroup value={selectedDepth} onChange={(e) => setSelectedDepth(e.target.value)}>
+                  <div className="space-y-2">
+                    <FormControlLabel
+                      value="fast"
+                      control={<Radio />}
+                      label={
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-yellow-600" />
+                          <div>
+                            <div className="text-sm font-medium">快速扫描 (~5秒)</div>
+                            <div className="text-xs text-slate-500">只看 diff</div>
+                          </div>
+                        </div>
+                      }
+                    />
+                    <FormControlLabel
+                      value="standard"
+                      control={<Radio />}
+                      label={
+                        <div className="flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-blue-600" />
+                          <div>
+                            <div className="text-sm font-medium">标准审查 (~15秒)</div>
+                            <div className="text-xs text-slate-500">+上下文 +依赖</div>
+                          </div>
+                        </div>
+                      }
+                    />
+                    <FormControlLabel
+                      value="deep"
+                      control={<Radio />}
+                      label={
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-purple-600" />
+                          <div>
+                            <div className="text-sm font-medium">深度审查 (~30秒)</div>
+                            <div className="text-xs text-slate-500">+关联文件 +PR评论</div>
+                          </div>
+                        </div>
+                      }
+                    />
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog} color="inherit">
+            取消
+          </Button>
+          <Button onClick={handleConfirmReanalyze} variant="contained" color="primary">
+            开始分析
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

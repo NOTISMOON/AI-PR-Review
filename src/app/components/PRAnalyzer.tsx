@@ -28,6 +28,8 @@ interface PRAnalyzerProps {
   onAnalyze: (prUrl: string, options?: Partial<AnalyzeRequest>) => void;
   onOpenHistory: () => void;
   loading: boolean;
+  initialPrUrl?: string;
+  initialDepth?: AnalysisDepth;
 }
 
 type AnalysisDepth = 'fast' | 'standard' | 'deep';
@@ -56,9 +58,11 @@ const depthOptions: { value: AnalysisDepth; label: string; icon: ReactNode; desc
   },
 ];
 
-export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading }: PRAnalyzerProps) {
-  const [prUrl, setPrUrl] = useState('');
-  const [depth, setDepth] = useState<AnalysisDepth>('standard');
+export { type AnalysisDepth, depthOptions };
+
+export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading, initialPrUrl, initialDepth }: PRAnalyzerProps) {
+  const [prUrl, setPrUrl] = useState(initialPrUrl ?? '');
+  const [depth, setDepth] = useState<AnalysisDepth>(initialDepth ?? 'standard');
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
