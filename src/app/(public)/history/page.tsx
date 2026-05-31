@@ -49,6 +49,7 @@ export default function HistoryRoutePage() {
       const allModels = storedModels ? JSON.parse(storedModels) : [];
       const activeModel = allModels.find((m: any) => m.isActive);
 
+      // 启用二次审查模式：基于最新缓存进行迭代分析
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,6 +58,7 @@ export default function HistoryRoutePage() {
           depth,
           githubToken,
           customModels: activeModel ? [activeModel] : undefined,
+          reviewMode: true, // 启用二次审查模式
         }),
       });
 
@@ -73,6 +75,7 @@ export default function HistoryRoutePage() {
           savedAt: analysis.analyzedAt ?? new Date().toISOString(),
           data: analysis,
         };
+        // 保存新的分析结果，更新本地缓存
         saveLocalHistoryEntry(newEntry);
         setEntries((prev) => [newEntry, ...prev.filter((e) => e.analysisRunId !== newEntry.analysisRunId)]);
         router.push(`/analysis/${analysis.analysisRunId}`);

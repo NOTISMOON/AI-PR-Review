@@ -13,6 +13,7 @@ import { buildUserMessage } from './helpers/message-builder';
 import { normalizeAnalysisData, buildResponse } from './helpers/data-normalizer';
 import { truncateDiffSmart, buildCacheKey } from './helpers/diff-utils';
 import { buildContextSnapshot } from './helpers/context-snapshot';
+import { REVIEW_MODE_INSTRUCTIONS } from '@/lib/prompts/review-mode-instructions';
 import type {
   AnalyzeError,
   AnalyzeRequest,
@@ -57,17 +58,31 @@ export async function POST(request: NextRequest) {
 
     const { owner, repo, prNumber } = parsed;
     const depth = body.depth || 'standard';
+    const reviewMode = body.reviewMode || false; // 是否为二次审查模式
     const useStreaming = request.headers.get('accept') === 'text/event-stream';
 
     const prInfo = await fetchPRInfo(owner, repo, prNumber);
     const cacheKey = buildCacheKey(owner, repo, prNumber, prInfo.headSha, depth);
 
-    if (!useStreaming) {
-      const cached = (analysisCache.get(cacheKey) as AnalysisResponse | null) ?? (await findCachedAnalysis(cacheKey));
-      if (cached) {
+    // 获取最新的缓存结果
+    const latestCached = (analysisCache.get(cacheKey) as AnalysisResponse | null) ?? (await findCachedAnalysis(cacheKey));
+
+    // 二次审查模式：基于最新缓存进行迭代分析
+    let previousAnalysis: AnalysisResponse | null = null;
+    if (reviewMode) {
+      if (latestCached) {
+        previousAnalysis = latestCached;
+        console.log(`[Review Mode] 基于最新缓存进行二次审查，分析 ID: ${latestCached.analysisRunId}`);
+      } else {
+        clearGitHubToken();
+        return errorResponse('未找到可用于二次审查的分析结果，请先进行初次分析', 'NOT_FOUND', 404);
+      }
+    } else {
+      // 非二次审查模式：如果有缓存且非流式，直接返回
+      if (latestCached && !useStreaming) {
         clearGitHubToken();
         const response = {
-          ...cached,
+          ...latestCached,
           cacheHit: true,
         } satisfies AnalysisResponse;
         analysisCache.set(cacheKey, response);
@@ -116,6 +131,12 @@ export async function POST(request: NextRequest) {
 
     const { effectiveDiff, diffTruncated } = truncateDiffSmart(collected.diff, 240000);
     const promptConfig = createPromptConfig(depth, collected.fileChanges, diffTruncated);
+
+    // 如果是二次审查模式，添加初次分析结果到 customInstructions
+    if (reviewMode && previousAnalysis) {
+      promptConfig.customInstructions = (promptConfig.customInstructions || '') + buildReviewModeContext(previousAnalysis);
+    }
+
     const systemPrompt = composeSystemPrompt(promptConfig);
     const { userMessage } = await buildUserMessage(collected, effectiveDiff, diffTruncated);
 
@@ -410,4 +431,52 @@ function errorResponse(message: string, code: string, status: number): NextRespo
   return NextResponse.json(error, { status });
 }
 
+/**
+ * 构建二次审查模式的上下文
+ * 将初次分析结果格式化为提示词的一部分
+ */
+function buildReviewModeContext(previousAnalysis: AnalysisResponse): string {
+  return `
+
+${REVIEW_MODE_INSTRUCTIONS}
+
+## 初次分析结果
+
+以下是对同一 PR 的初次分析结果，请基于此进行二次审查：
+
+### 初次分析总结
+${previousAnalysis.summary}
+
+### 初次分析风险等级
+${previousAnalysis.riskLevel}
+
+### 初次分析识别的风险（共 ${previousAnalysis.risks.length} 个）
+
+${previousAnalysis.risks.map((risk, index) => `
+#### 风险 ${index + 1}：${risk.title}
+- **严重程度**：${risk.severity}
+- **置信度**：${risk.confidence}
+- **文件**：${risk.file}:${risk.line}
+- **描述**：${risk.description}
+- **建议**：${risk.suggestion}
+${risk.confidenceRationale ? `- **理由**：${risk.confidenceRationale}` : ''}
+`).join('\n')}
+
+### 初次分析的审查评论（共 ${previousAnalysis.reviewComments.length} 个）
+
+${previousAnalysis.reviewComments.map((comment, index) => `
+#### 评论 ${index + 1}
+- **类型**：${comment.type}
+- **内容**：${comment.comment}
+`).join('\n')}
+
+---
+
+**请注意：**
+1. 你的任务是验证以上分析的准确性，并发现可能遗漏的问题
+2. 不要简单重复初次分析的内容
+3. 如果初次分析已经很完善，可以简单确认
+4. 重点关注初次分析可能遗漏或误判的地方
+`;
+}
 

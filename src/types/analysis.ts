@@ -162,6 +162,7 @@ export interface AnalyzeRequest {
   ensembleMode?: boolean;
   githubToken?: string;
   customModels?: CustomModelConfig[];
+  reviewMode?: boolean; // 二次审查模式：基于最新缓存结果进行迭代分析
 }
 
 export interface AnalyzeError {
