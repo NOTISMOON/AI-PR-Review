@@ -40,12 +40,23 @@ export default function HistoryRoutePage() {
     try {
       setBusyId(entry.analysisRunId);
       setErrorMessage(null);
+
+      // Get GitHub token from localStorage
+      const githubToken = localStorage.getItem('github_token') || undefined;
+
+      // Get custom models from localStorage and filter active one
+      const storedModels = localStorage.getItem('local_models');
+      const allModels = storedModels ? JSON.parse(storedModels) : [];
+      const activeModel = allModels.find((m: any) => m.isActive);
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prUrl: entry.prUrl,
           depth,
+          githubToken,
+          customModels: activeModel ? [activeModel] : undefined,
         }),
       });
 
