@@ -51,6 +51,7 @@ interface LocalModel {
   apiUrl: string;
   apiKey: string;
   createdAt: string;
+  isActive?: boolean;
 }
 
 export default function LocalModelsPage() {
@@ -124,6 +125,7 @@ export default function LocalModelsPage() {
         apiUrl: apiUrl.trim(),
         apiKey: apiKey.trim(),
         createdAt: new Date().toISOString(),
+        isActive: models.length === 0, // First model is active by default
       };
       saveModels([...models, newModel]);
     }
@@ -133,6 +135,14 @@ export default function LocalModelsPage() {
 
   const handleDeleteModel = (id: string) => {
     const updatedModels = models.filter(m => m.id !== id);
+    saveModels(updatedModels);
+  };
+
+  const handleSetActive = (id: string) => {
+    const updatedModels = models.map(m => ({
+      ...m,
+      isActive: m.id === id,
+    }));
     saveModels(updatedModels);
   };
 
@@ -167,6 +177,15 @@ export default function LocalModelsPage() {
               配置本机的大模型 API。配置将保存在浏览器本地存储中。
             </Alert>
 
+            {models.length > 0 && models.some(m => m.isActive) && (
+              <Alert severity="success">
+                <AlertTitle>当前使用的模型</AlertTitle>
+                <p className="text-sm">
+                  <strong>{models.find(m => m.isActive)?.name}</strong> - {models.find(m => m.isActive)?.apiUrl}
+                </p>
+              </Alert>
+            )}
+
             {models.length === 0 ? (
               <Card className="shadow-lg">
                 <CardContent className="p-12 text-center">
@@ -186,6 +205,7 @@ export default function LocalModelsPage() {
                   <Table>
                     <TableHead>
                       <TableRow>
+                        <TableCell><strong>状态</strong></TableCell>
                         <TableCell><strong>模型名称</strong></TableCell>
                         <TableCell><strong>API 地址</strong></TableCell>
                         <TableCell><strong>API Key</strong></TableCell>
@@ -196,6 +216,15 @@ export default function LocalModelsPage() {
                     <TableBody>
                       {models.map((model) => (
                         <TableRow key={model.id} hover>
+                          <TableCell>
+                            {model.isActive ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                                使用中
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">未使用</span>
+                            )}
+                          </TableCell>
                           <TableCell>{model.name}</TableCell>
                           <TableCell className="max-w-xs truncate">{model.apiUrl}</TableCell>
                           <TableCell>
@@ -206,6 +235,16 @@ export default function LocalModelsPage() {
                           </TableCell>
                           <TableCell align="right">
                             <div className="flex justify-end gap-2">
+                              {!model.isActive && (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="primary"
+                                  onClick={() => handleSetActive(model.id)}
+                                >
+                                  使用
+                                </Button>
+                              )}
                               <Button
                                 size="small"
                                 variant="outlined"

@@ -35,9 +35,10 @@ export default function App() {
       // Get GitHub token from localStorage
       const githubToken = localStorage.getItem('github_token') || undefined;
 
-      // Get custom models from localStorage
+      // Get custom models from localStorage and filter active one
       const storedModels = localStorage.getItem('local_models');
-      const customModels = storedModels ? JSON.parse(storedModels) : [];
+      const allModels = storedModels ? JSON.parse(storedModels) : [];
+      const activeModel = allModels.find((m: any) => m.isActive);
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -46,7 +47,7 @@ export default function App() {
           prUrl,
           ...options,
           githubToken,
-          customModels: customModels.length > 0 ? customModels : undefined,
+          customModels: activeModel ? [activeModel] : undefined,
         }),
       });
 
