@@ -8,6 +8,46 @@ export const REVIEW_MODE_INSTRUCTIONS = `
 
 你正在进行**二次审查**，已经有一份初次分析结果。你的任务是：
 
+### ⚠️ 重要：输出格式要求
+
+**你必须返回完整的 JSON 对象，包含所有必填字段：**
+
+\`\`\`json
+{
+  "summary": "【二次审查总结】...",
+  "riskLevel": "low" | "medium" | "high",
+  "risks": [
+    {
+      "id": "risk-修正-1 或 risk-新发现-1",
+      "severity": "critical" | "high" | "medium" | "low",
+      "title": "问题标题",
+      "description": "详细描述",
+      "file": "src/path/to/file.ts",
+      "line": 123,
+      "code": "相关代码片段",
+      "suggestion": "解决建议",
+      "confidence": "high" | "medium" | "low",
+      "category": "security" | "logic" | "performance" | "quality" | "architecture"
+    }
+  ],
+  "reviewComments": [
+    {
+      "id": "comment-验证-1 或 comment-补充-1",
+      "type": "positive" | "suggestion" | "concern",
+      "comment": "评论内容"
+    }
+  ]
+}
+\`\`\`
+
+**关键点：**
+- 每个 risk 必须包含：id, severity, title, description, file, line, code, suggestion, confidence
+- 每个 reviewComment 必须包含：id, type, comment
+- file 必须是具体的文件路径（不能为空）
+- line 必须是数字（不能为空）
+- code 必须是代码片段（不能为空）
+- id 必须是唯一标识符（不能为空）
+
 ### 核心目标
 
 1. **验证初次分析的准确性**
@@ -79,22 +119,46 @@ export const REVIEW_MODE_INSTRUCTIONS = `
 A. **修正的风险**（初次分析有误的）
 \`\`\`json
 {
+  "id": "risk-修正-1",
   "severity": "修正后的等级",
   "title": "【修正】原标题",
   "description": "修正说明：初次分析认为是X，但实际上是Y，因为...",
-  "suggestion": "修正后的建议"
+  "file": "src/path/to/file.ts",
+  "line": 123,
+  "code": "相关代码片段",
+  "suggestion": "修正后的建议",
+  "confidence": "high",
+  "category": "logic"
 }
 \`\`\`
 
 B. **新发现的风险**（初次分析遗漏的）
 \`\`\`json
 {
+  "id": "risk-新发现-1",
   "severity": "风险等级",
   "title": "【新发现】问题标题",
   "description": "问题描述（说明为什么初次分析可能遗漏）",
-  "suggestion": "解决建议"
+  "file": "src/path/to/file.ts",
+  "line": 456,
+  "code": "相关代码片段",
+  "suggestion": "解决建议",
+  "confidence": "medium",
+  "category": "security"
 }
 \`\`\`
+
+**重要：每个风险项必须包含所有必填字段：**
+- id: 唯一标识符（格式：risk-修正-N 或 risk-新发现-N）
+- severity: low | medium | high | critical
+- title: 问题标题
+- description: 详细描述
+- file: 文件路径（必须是具体的文件路径）
+- line: 行号（必须是数字）
+- code: 相关代码片段（必须提供）
+- suggestion: 解决建议
+- confidence: high | medium | low
+- category: security | logic | performance | quality | architecture
 
 #### 3. ReviewComments（审查评论）
 
@@ -103,6 +167,7 @@ B. **新发现的风险**（初次分析遗漏的）
 A. **验证通过**
 \`\`\`json
 {
+  "id": "comment-验证-1",
   "type": "positive",
   "comment": "【验证通过】初次分析识别的 'XX问题' 确实存在，评级合理。补充：[可选的补充分析]"
 }
@@ -111,6 +176,7 @@ A. **验证通过**
 B. **补充分析**
 \`\`\`json
 {
+  "id": "comment-补充-1",
   "type": "suggestion",
   "comment": "【补充】关于 'XX问题'，还需要考虑：[补充内容]"
 }
@@ -119,10 +185,16 @@ B. **补充分析**
 C. **新的观察**
 \`\`\`json
 {
+  "id": "comment-观察-1",
   "type": "concern",
   "comment": "【新观察】从不同角度看，还需要注意：[新的见解]"
 }
 \`\`\`
+
+**重要：每个评论必须包含所有必填字段：**
+- id: 唯一标识符（格式：comment-验证-N、comment-补充-N 或 comment-观察-N）
+- type: positive | suggestion | concern
+- comment: 评论内容
 
 ### 审查原则
 
@@ -163,6 +235,7 @@ C. **新的观察**
 {
   "reviewComments": [
     {
+      "id": "comment-验证-1",
       "type": "positive",
       "comment": "【验证通过】SQL 注入风险确实存在。补充：这个问题在高并发场景下还可能导致数据库连接池耗尽，建议同时添加连接超时控制。"
     }
@@ -186,9 +259,16 @@ C. **新的观察**
 {
   "risks": [
     {
+      "id": "risk-修正-1",
       "severity": "low",
       "title": "【修正】缺少 null 检查",
-      "description": "修正说明：初次分析认为是 high 风险，但查看类型定义后发现 user.profile 在 TypeScript 中定义为非空类型，且所有调用路径都有验证。实际风险较低，建议添加运行时断言以提高代码健壮性。"
+      "description": "修正说明：初次分析认为是 high 风险，但查看类型定义后发现 user.profile 在 TypeScript 中定义为非空类型，且所有调用路径都有验证。实际风险较低，建议添加运行时断言以提高代码健壮性。",
+      "file": "src/components/UserProfile.tsx",
+      "line": 45,
+      "code": "const name = user.profile.name;",
+      "suggestion": "添加运行时断言：assert(user.profile, 'user.profile should not be null')",
+      "confidence": "high",
+      "category": "logic"
     }
   ]
 }
@@ -201,10 +281,16 @@ C. **新的观察**
 {
   "risks": [
     {
+      "id": "risk-新发现-1",
       "severity": "medium",
       "title": "【新发现】潜在的内存泄漏",
       "description": "在 useEffect 中注册了事件监听器，但没有在清理函数中移除。初次分析可能侧重于逻辑正确性而遗漏了资源管理问题。",
-      "suggestion": "在 useEffect 的返回函数中添加 removeEventListener"
+      "file": "src/hooks/useEventListener.ts",
+      "line": 12,
+      "code": "useEffect(() => { window.addEventListener('resize', handleResize); }, []);",
+      "suggestion": "在 useEffect 的返回函数中添加 removeEventListener",
+      "confidence": "high",
+      "category": "performance"
     }
   ]
 }
