@@ -33,10 +33,9 @@ function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, s
     'User-Agent': 'ai-pr-review-tool/1.0',
     ...extraHeaders,
   };
-  // Prioritize token from request context, fallback to environment variable
-  const token = currentGitHubToken || process.env.GITHUB_TOKEN;
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  // Use token from request context only
+  if (currentGitHubToken) {
+    headers.Authorization = `Bearer ${currentGitHubToken}`;
   }
   return headers;
 }

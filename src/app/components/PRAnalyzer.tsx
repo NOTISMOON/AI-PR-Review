@@ -30,6 +30,7 @@ interface PRAnalyzerProps {
   onOpenHistory: () => void;
   onOpenSettings: () => void;
   loading: boolean;
+  hasModel?: boolean;
   initialPrUrl?: string;
   initialDepth?: AnalysisDepth;
 }
@@ -99,7 +100,7 @@ const DepthOption = React.memo(({ option, isSelected, onSelect, disabled }: Dept
 
 DepthOption.displayName = 'DepthOption';
 
-export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, loading, initialPrUrl, initialDepth }: PRAnalyzerProps) {
+export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, loading, hasModel = true, initialPrUrl, initialDepth }: PRAnalyzerProps) {
   const [prUrl, setPrUrl] = useState(initialPrUrl ?? '');
   const [depth, setDepth] = useState<AnalysisDepth>(initialDepth ?? 'standard');
 
@@ -163,7 +164,7 @@ export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, l
                   type="submit"
                   variant="contained"
                   size="large"
-                  disabled={loading || !prUrl.trim()}
+                  disabled={loading || !prUrl.trim() || !hasModel}
                   sx={{
                     minWidth: '140px',
                     background: 'linear-gradient(135deg, #059669 0%, #0d9488 100%)',
@@ -175,6 +176,13 @@ export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, l
                   {loading ? '分析中...' : '开始分析'}
                 </Button>
               </div>
+
+              {!hasModel && (
+                <Alert severity="warning" className="mb-4">
+                  <AlertTitle>需要配置模型</AlertTitle>
+                  请先在<button onClick={onOpenSettings} className="font-semibold text-orange-700 underline">设置页面</button>配置至少一个大模型，才能开始分析。
+                </Alert>
+              )}
 
               <div>
                 <p className="mb-2 flex items-center gap-1 text-sm font-medium text-slate-700">

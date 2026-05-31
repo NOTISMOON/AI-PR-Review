@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Snackbar } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -26,6 +26,15 @@ export default function App() {
   const router = useRouter();
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasModel, setHasModel] = useState(true);
+
+  useEffect(() => {
+    // Check if user has configured a model
+    const storedModels = localStorage.getItem('local_models');
+    const allModels = storedModels ? JSON.parse(storedModels) : [];
+    const activeModel = allModels.find((m: any) => m.isActive);
+    setHasModel(!!activeModel);
+  }, []);
 
   const handleAnalyze = async (prUrl: string, options?: Partial<AnalyzeRequest>) => {
     setAnalyzing(true);
@@ -78,6 +87,7 @@ export default function App() {
           onOpenHistory={() => router.push('/history')}
           onOpenSettings={() => router.push('/settings')}
           loading={analyzing}
+          hasModel={hasModel}
         />
         <Snackbar
           open={!!error}
