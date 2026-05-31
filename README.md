@@ -507,7 +507,7 @@ pnpm db:seed          # 填充种子数据
 如有问题或建议，欢迎通过以下方式联系：
 
 - 提交 [Issue](https://github.com/NOTISMOON/AI-PR-Review/issues)
-- 发送邮件至：your.email@example.com
+- 发送邮件至：xyao526c@gmail.com
 
 ---
 
