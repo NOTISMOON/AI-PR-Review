@@ -32,10 +32,22 @@ export default function App() {
     setError(null);
 
     try {
+      // Get GitHub token from localStorage
+      const githubToken = localStorage.getItem('github_token') || undefined;
+
+      // Get custom models from localStorage
+      const storedModels = localStorage.getItem('local_models');
+      const customModels = storedModels ? JSON.parse(storedModels) : [];
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl, ...options }),
+        body: JSON.stringify({
+          prUrl,
+          ...options,
+          githubToken,
+          customModels: customModels.length > 0 ? customModels : undefined,
+        }),
       });
 
       const data = await response.json();

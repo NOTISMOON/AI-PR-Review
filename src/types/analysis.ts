@@ -149,11 +149,20 @@ export interface AnalysisResponse extends AnalysisData {
   contextSnapshot?: AnalysisContextSnapshotData;
 }
 
+export interface CustomModelConfig {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+}
+
 export interface AnalyzeRequest {
   prUrl: string;
   preferredModel?: string;
   depth?: 'fast' | 'standard' | 'deep';
   ensembleMode?: boolean;
+  githubToken?: string;
+  customModels?: CustomModelConfig[];
 }
 
 export interface AnalyzeError {
