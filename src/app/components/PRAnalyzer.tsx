@@ -43,21 +43,21 @@ const depthOptions: { value: AnalysisDepth; label: string; icon: ReactNode; desc
     label: '快速扫描',
     icon: <Zap className="h-4 w-4" />,
     desc: '只看 diff，快速拿到风险概览',
-    time: '~5秒',
+    time: '较短',
   },
   {
     value: 'standard',
     label: '标准审查',
     icon: <Brain className="h-4 w-4" />,
     desc: '结合上下文、提交历史和依赖信息',
-    time: '~15秒',
+    time: '长',
   },
   {
     value: 'deep',
     label: '深度审查',
     icon: <Sparkles className="h-4 w-4" />,
     desc: '尽可能拉满上下文，适合关键变更',
-    time: '~30秒',
+    time: '较长',
   },
 ];
 
