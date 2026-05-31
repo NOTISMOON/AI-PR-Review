@@ -89,10 +89,6 @@ export const anthropicProvider: ModelProvider = {
               outputTokens: data.usage.output_tokens,
             }
           : undefined,
-        estimatedCost: data.usage
-          ? (data.usage.input_tokens / 1_000_000) * 3.00 +
-            (data.usage.output_tokens / 1_000_000) * 15.00
-          : undefined,
       };
     } catch (error: any) {
       if (error.code === 'AI_CONFIG_ERROR' || error.code === 'AI_RATE_LIMIT') throw error;

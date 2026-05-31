@@ -60,10 +60,6 @@ export const openaiProvider: ModelProvider = {
               outputTokens: response.usage.completion_tokens,
             }
           : undefined,
-        estimatedCost: response.usage
-          ? (response.usage.prompt_tokens / 1_000_000) * 2.50 +
-            (response.usage.completion_tokens / 1_000_000) * 10.00
-          : undefined,
       };
     } catch (error: any) {
       if (error.status === 429) {

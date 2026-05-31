@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai';
 import type { ModelProvider, ModelConfig, ModelAnalysisRequest, ModelAnalysisResult } from '../types';
+import { estimateTokens } from '@/lib/context/token-counter';
 
 export function createCustomProvider(
   name: string,
@@ -69,18 +70,34 @@ export function createCustomProvider(
         const latencyMs = Date.now() - startTime;
         const content = response.choices[0]?.message?.content || '';
 
+        // If API doesn't return usage, estimate it
+        let usage = response.usage
+          ? {
+              inputTokens: response.usage.prompt_tokens,
+              outputTokens: response.usage.completion_tokens,
+            }
+          : undefined;
+
+        if (!usage) {
+          const estimatedInput = estimateTokens(request.systemPrompt + '\n\n' + request.userMessage);
+          const estimatedOutput = estimateTokens(content);
+
+          usage = {
+            inputTokens: estimatedInput,
+            outputTokens: estimatedOutput,
+          };
+
+          console.warn(
+            `[Custom Provider] API did not return usage, estimated: ${estimatedInput} input + ${estimatedOutput} output tokens`
+          );
+        }
+
         return {
           content,
           modelId: modelName,
           provider: 'custom',
           latencyMs,
-          usage: response.usage
-            ? {
-                inputTokens: response.usage.prompt_tokens,
-                outputTokens: response.usage.completion_tokens,
-              }
-            : undefined,
-          estimatedCost: 0, // Custom models have no cost tracking
+          usage,
         };
       } catch (error: any) {
         if (error.status === 429) {

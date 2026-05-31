@@ -172,10 +172,10 @@ function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) 
                   {(data.latencyMs / 1000).toFixed(1)}s
                 </span>
               )}
-              {data.estimatedCost !== undefined && (
+              {data.tokenUsage && (
                 <span className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  ${data.estimatedCost.toFixed(4)}
+                  <Info className="h-3 w-3" />
+                  {(data.tokenUsage.inputTokens + data.tokenUsage.outputTokens).toLocaleString()} tokens
                 </span>
               )}
             </div>
