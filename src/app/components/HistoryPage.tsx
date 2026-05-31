@@ -168,6 +168,12 @@ export default function HistoryPage({
                           <Clock3 className="h-4 w-4" />
                           {new Date(entry.savedAt).toLocaleString('zh-CN')}
                         </span>
+                        {entry.data.tokenUsage && (
+                          <span className="inline-flex items-center gap-1">
+                            <Zap className="h-4 w-4 text-amber-500" />
+                            {(entry.data.tokenUsage.inputTokens + entry.data.tokenUsage.outputTokens).toLocaleString()} tokens
+                          </span>
+                        )}
                         {entry.data.modelUsed && (
                           <span>
                             {entry.data.provider}/{entry.data.modelUsed}

@@ -11,7 +11,6 @@ export function normalizeAnalysisData(
   providerName: string,
   latencyMs: number,
   usage?: { inputTokens: number; outputTokens: number },
-  estimatedCost?: number,
 ): AnalysisData {
   const rawSummary = typeof raw.summary === 'string' ? raw.summary : 'AI 未返回有效的摘要信息。';
   const rawRiskLevel = raw.riskLevel as string;
@@ -48,7 +47,6 @@ export function normalizeAnalysisData(
     fileChanges: collected.fileChanges,
     modelUsed: modelId,
     provider: providerName,
-    estimatedCost,
     latencyMs,
     tokenUsage: usage,
   };

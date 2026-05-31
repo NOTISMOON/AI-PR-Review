@@ -153,7 +153,6 @@ export async function POST(request: NextRequest) {
             providerName,
             latencyMs,
             result.usage,
-            result.estimatedCost,
           ),
           {
             analysisRunId,
@@ -208,7 +207,6 @@ export async function POST(request: NextRequest) {
         fileChanges: collected.fileChanges,
         modelUsed: modelId,
         provider: providerName,
-        estimatedCost: result.estimatedCost,
         latencyMs,
         tokenUsage: result.usage,
       };
@@ -372,7 +370,6 @@ async function handleStreamingResponse(
             totalRisks: validation.data.risks.length,
             totalComments: validation.data.reviewComments.length,
             modelUsed: modelId,
-            estimatedCost: 0,
             latencyMs: Date.now() - startTime,
           });
         } else {

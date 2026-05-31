@@ -132,7 +132,6 @@ export interface AnalysisData {
   fileChanges: FileChange[];
   modelUsed?: string;
   provider?: string;
-  estimatedCost?: number;
   latencyMs?: number;
   tokenUsage?: {
     inputTokens: number;
@@ -199,8 +198,8 @@ export interface SSECompleteEvent {
   totalRisks: number;
   totalComments: number;
   modelUsed: string;
-  estimatedCost: number;
   latencyMs: number;
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export interface SSEErrorEvent {

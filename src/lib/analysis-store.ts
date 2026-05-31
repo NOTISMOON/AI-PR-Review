@@ -229,7 +229,6 @@ function toAnalysisResponse(run: PersistedAnalysisRun): AnalysisResponse {
     })),
     modelUsed: run.modelUsed ?? undefined,
     provider: run.provider ?? undefined,
-    estimatedCost: toNumber(run.estimatedCost),
     latencyMs: run.latencyMs ?? undefined,
     tokenUsage:
       run.inputTokens != null && run.outputTokens != null
@@ -339,7 +338,6 @@ export async function startAnalysisRun(params: {
       riskLevel: null,
       modelUsed: null,
       provider: null,
-      estimatedCost: null,
       latencyMs: null,
       inputTokens: null,
       outputTokens: null,
@@ -386,7 +384,6 @@ export async function completeAnalysisRun(params: {
         riskLevel: toPrismaRiskLevel(data.riskLevel),
         modelUsed: data.modelUsed,
         provider: data.provider,
-        estimatedCost: data.estimatedCost,
         latencyMs: data.latencyMs,
         inputTokens: data.tokenUsage?.inputTokens,
         outputTokens: data.tokenUsage?.outputTokens,

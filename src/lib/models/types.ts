@@ -61,8 +61,6 @@ export interface ModelAnalysisResult {
     inputTokens: number;
     outputTokens: number;
   };
-  /** Estimated cost in USD */
-  estimatedCost?: number;
   /** Latency in milliseconds */
   latencyMs: number;
 }
