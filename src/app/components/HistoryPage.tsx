@@ -233,7 +233,7 @@ export default function HistoryPage({
                 <p className="text-xs text-slate-500">#{selectedEntry.data.prInfo.number}</p>
                 <p className="mt-2 text-xs text-slate-500">
                   上次分析: {selectedEntry.data.depth ?? 'standard'} (
-                  {selectedEntry.data.depth === 'fast' ? '~5秒' : selectedEntry.data.depth === 'deep' ? '~30秒' : '~15秒'})
+                  {selectedEntry.data.depth === 'fast' ? '较短' : selectedEntry.data.depth === 'deep' ? '较长' : '长'})
                 </p>
               </div>
 
@@ -248,7 +248,7 @@ export default function HistoryPage({
                         <div className="flex items-center gap-2">
                           <Zap className="h-4 w-4 text-yellow-600" />
                           <div>
-                            <div className="text-sm font-medium">快速扫描 (~5秒)</div>
+                            <div className="text-sm font-medium">快速扫描 (较短)</div>
                             <div className="text-xs text-slate-500">只看 diff</div>
                           </div>
                         </div>
@@ -261,7 +261,7 @@ export default function HistoryPage({
                         <div className="flex items-center gap-2">
                           <Brain className="h-4 w-4 text-blue-600" />
                           <div>
-                            <div className="text-sm font-medium">标准审查 (~15秒)</div>
+                            <div className="text-sm font-medium">标准审查 (长)</div>
                             <div className="text-xs text-slate-500">+上下文 +依赖</div>
                           </div>
                         </div>
@@ -274,7 +274,7 @@ export default function HistoryPage({
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-purple-600" />
                           <div>
-                            <div className="text-sm font-medium">深度审查 (~30秒)</div>
+                            <div className="text-sm font-medium">深度审查 (较长)</div>
                             <div className="text-xs text-slate-500">+关联文件 +PR评论</div>
                           </div>
                         </div>
