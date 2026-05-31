@@ -10,7 +10,8 @@
 ## 📹 项目演示
 
 **演示视频：** [点击观看项目运行演示](https://www.bilibili.com/video/BV16aVQ6JEiT/?vd_source=a0d1e87a0024e87af56b3f486431a861)
-**项目上线地址：** https://ai-pr-review-eta.vercel.app/（需要搭梯子）
+**项目上线地址：** https://ai-pr-review-eta.vercel.app/
+需要搭梯子
 
 > 视频展示了完整的代码审查流程，包括三种分析模式的对比、风险识别、智能建议等核心功能
 
