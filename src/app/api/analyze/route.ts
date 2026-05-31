@@ -93,15 +93,14 @@ export async function POST(request: NextRequest) {
       ensembleMode: body.ensembleMode,
     });
 
-    const decision = routeModel(routingCtx);
+    let provider;
+    let modelId;
+    let providerName;
+    let maxOutputTokens = 4096; // Default max tokens
 
-    // Check if user wants to use a custom model
-    let provider = getProviderForModel(decision.model);
-    let modelId = decision.model.modelId;
-    let providerName = decision.model.provider;
-
+    // Check if user has configured a custom model
     if (body.customModels && body.customModels.length > 0) {
-      // Use the first custom model if provided
+      // Use the custom model
       const customModel = body.customModels[0];
       provider = createCustomProvider(
         customModel.name,
@@ -111,6 +110,14 @@ export async function POST(request: NextRequest) {
       );
       modelId = customModel.name;
       providerName = 'custom';
+    } else {
+      // No model configured
+      clearGitHubToken();
+      return errorResponse(
+        '未配置模型。请在设置页面配置至少一个大模型。',
+        'AI_CONFIG_ERROR',
+        400
+      );
     }
 
     const { effectiveDiff, diffTruncated } = truncateDiffSmart(collected.diff, 240000);
@@ -127,7 +134,7 @@ export async function POST(request: NextRequest) {
       systemPrompt,
       userMessage,
       temperature: 0.1,
-      maxTokens: decision.model.maxOutputTokens,
+      maxTokens: maxOutputTokens,
     });
     const latencyMs = Date.now() - startTime;
 
@@ -148,8 +155,8 @@ export async function POST(request: NextRequest) {
           normalizeAnalysisData(
             parsedOutput as Record<string, unknown>,
             collected,
-            decision.model.modelId,
-            decision.model.provider,
+            modelId,
+            providerName,
             latencyMs,
             result.usage,
             result.estimatedCost,
