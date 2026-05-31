@@ -254,6 +254,23 @@ export async function findCachedAnalysis(cacheKey: string) {
   return toAnalysisResponse(run);
 }
 
+export async function findLatestAnalysisByPR(owner: string, repo: string, prNumber: number) {
+  const run = await prisma.analysisRun.findFirst({
+    where: {
+      status: AnalysisStatus.SUCCEEDED,
+      pullRequest: {
+        number: prNumber,
+        repository: { owner, name: repo },
+      },
+    },
+    orderBy: { completedAt: 'desc' },
+    include: analysisInclude,
+  });
+
+  if (!run) return null;
+  return toAnalysisResponse(run);
+}
+
 export async function getAnalysisById(analysisRunId: string) {
   const run = await prisma.analysisRun.findUnique({
     where: { id: analysisRunId },
