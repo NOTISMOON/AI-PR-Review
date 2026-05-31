@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     // Check if user wants to use a custom model
     let provider = getProviderForModel(decision.model);
     let modelId = decision.model.modelId;
+    let providerName = decision.model.provider;
 
     if (body.customModels && body.customModels.length > 0) {
       // Use the first custom model if provided
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
         customModel.name
       );
       modelId = customModel.name;
+      providerName = 'custom';
     }
 
     const { effectiveDiff, diffTruncated } = truncateDiffSmart(collected.diff, 240000);
@@ -203,8 +205,8 @@ export async function POST(request: NextRequest) {
           comment: comment.comment,
         })),
         fileChanges: collected.fileChanges,
-        modelUsed: decision.model.modelId,
-        provider: decision.model.provider,
+        modelUsed: modelId,
+        provider: providerName,
         estimatedCost: result.estimatedCost,
         latencyMs,
         tokenUsage: result.usage,
