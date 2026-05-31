@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analysisCache } from '@/lib/cache';
 import { collectDeepContext, collectQuickContext, collectStandardContext } from '@/lib/context';
 import { findCachedAnalysis, startAnalysisRun, completeAnalysisRun, failAnalysisRun } from '@/lib/analysis-store';
-import { fetchPRInfo, parsePRUrl } from '@/lib/github';
+import { fetchPRInfo, parsePRUrl, setGitHubToken, clearGitHubToken } from '@/lib/github';
 import { getProviderForModel } from '@/lib/models';
 import { buildRoutingContext, routeModel } from '@/lib/models';
 import { composeSystemPrompt, createPromptConfig } from '@/lib/prompts';
 import { checkConsistency } from '@/lib/validation/consistency';
 import { validateAnalysisOutput } from '@/lib/validation/schema';
 import { evaluateQuality } from '@/lib/validation/quality';
+import { createCustomProvider } from '@/lib/models/providers/custom';
 import type {
   AnalyzeError,
   AnalyzeRequest,
@@ -36,8 +37,14 @@ export async function POST(request: NextRequest) {
       return errorResponse('请提供有效的 GitHub PR URL', 'INVALID_URL', 400);
     }
 
+    // Set GitHub token from request if provided
+    if (body.githubToken) {
+      setGitHubToken(body.githubToken);
+    }
+
     const parsed = parsePRUrl(body.prUrl);
     if (!parsed) {
+      clearGitHubToken();
       return errorResponse(
         'URL 格式不正确，请输入标准的 GitHub PR URL（例如：https://github.com/owner/repo/pull/123）',
         'INVALID_URL',
@@ -55,6 +62,7 @@ export async function POST(request: NextRequest) {
     if (!useStreaming) {
       const cached = (analysisCache.get(cacheKey) as AnalysisResponse | null) ?? (await findCachedAnalysis(cacheKey));
       if (cached) {
+        clearGitHubToken();
         const response = {
           ...cached,
           cacheHit: true,
@@ -86,14 +94,30 @@ export async function POST(request: NextRequest) {
     });
 
     const decision = routeModel(routingCtx);
-    const provider = getProviderForModel(decision.model);
+
+    // Check if user wants to use a custom model
+    let provider = getProviderForModel(decision.model);
+    let modelId = decision.model.modelId;
+
+    if (body.customModels && body.customModels.length > 0) {
+      // Use the first custom model if provided
+      const customModel = body.customModels[0];
+      provider = createCustomProvider(
+        customModel.name,
+        customModel.apiUrl,
+        customModel.apiKey,
+        customModel.name
+      );
+      modelId = customModel.name;
+    }
+
     const { effectiveDiff, diffTruncated } = truncateDiffSmart(collected.diff, 240000);
     const promptConfig = createPromptConfig(depth, collected.fileChanges, diffTruncated);
     const systemPrompt = composeSystemPrompt(promptConfig);
     const { userMessage } = await buildUserMessage(collected, effectiveDiff, diffTruncated);
 
     if (useStreaming) {
-      return handleStreamingResponse(provider, systemPrompt, userMessage, decision.model.modelId);
+      return handleStreamingResponse(provider, systemPrompt, userMessage, modelId, body.githubToken);
     }
 
     const startTime = Date.now();
@@ -104,6 +128,9 @@ export async function POST(request: NextRequest) {
       maxTokens: decision.model.maxOutputTokens,
     });
     const latencyMs = Date.now() - startTime;
+
+    // Clear GitHub token after analysis
+    clearGitHubToken();
 
     const parsedOutput = parseAIResponse(result.content);
     const validation = validateAnalysisOutput(parsedOutput);
@@ -206,6 +233,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error: any) {
     console.error('Analysis error:', error);
+
+    // Clear GitHub token on error
+    clearGitHubToken();
 
     const code = error.code || 'INTERNAL_ERROR';
     const statusMap: Record<string, number> = {
@@ -315,6 +345,7 @@ async function handleStreamingResponse(
   systemPrompt: string,
   userMessage: string,
   modelId: string,
+  githubToken?: string,
 ): Promise<NextResponse> {
   const startTime = Date.now();
   const encoder = new TextEncoder();
@@ -402,6 +433,8 @@ async function handleStreamingResponse(
           });
         }
 
+        // Clear GitHub token after streaming completes
+        clearGitHubToken();
         controller.close();
       } catch (error: any) {
         send({
@@ -409,6 +442,8 @@ async function handleStreamingResponse(
           message: error.message || '分析过程中出现错误',
           code: error.code || 'AI_ERROR',
         });
+        // Clear GitHub token on error
+        clearGitHubToken();
         controller.close();
       }
     },

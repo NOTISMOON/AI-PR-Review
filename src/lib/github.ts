@@ -9,13 +9,32 @@ const GITHUB_API_BASE = 'https://api.github.com';
 // File content cache to avoid duplicate fetches
 const fileContentCache = new Map<string, Promise<string | null>>();
 
+// Store the current GitHub token for this request context
+let currentGitHubToken: string | undefined;
+
+/**
+ * Set the GitHub token for the current request context.
+ * This should be called at the start of each API request.
+ */
+export function setGitHubToken(token: string | undefined) {
+  currentGitHubToken = token;
+}
+
+/**
+ * Clear the GitHub token after the request is complete.
+ */
+export function clearGitHubToken() {
+  currentGitHubToken = undefined;
+}
+
 function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'ai-pr-review-tool/1.0',
     ...extraHeaders,
   };
-  const token = process.env.GITHUB_TOKEN;
+  // Prioritize token from request context, fallback to environment variable
+  const token = currentGitHubToken || process.env.GITHUB_TOKEN;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
