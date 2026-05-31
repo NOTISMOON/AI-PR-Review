@@ -6,6 +6,7 @@ import {
   Clock,
   GitPullRequest,
   History,
+  Settings,
   Shield,
   Sparkles,
   TrendingUp,
@@ -27,6 +28,7 @@ import type { AnalyzeRequest } from '@/types/analysis';
 interface PRAnalyzerProps {
   onAnalyze: (prUrl: string, options?: Partial<AnalyzeRequest>) => void;
   onOpenHistory: () => void;
+  onOpenSettings: () => void;
   loading: boolean;
   initialPrUrl?: string;
   initialDepth?: AnalysisDepth;
@@ -97,7 +99,7 @@ const DepthOption = React.memo(({ option, isSelected, onSelect, disabled }: Dept
 
 DepthOption.displayName = 'DepthOption';
 
-export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading, initialPrUrl, initialDepth }: PRAnalyzerProps) {
+export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, loading, initialPrUrl, initialDepth }: PRAnalyzerProps) {
   const [prUrl, setPrUrl] = useState(initialPrUrl ?? '');
   const [depth, setDepth] = useState<AnalysisDepth>(initialDepth ?? 'standard');
 
@@ -124,14 +126,24 @@ export default function PRAnalyzer({ onAnalyze, onOpenHistory, loading, initialP
             </p>
           </div>
 
-          <Button
-            variant="outlined"
-            color="inherit"
-            onClick={onOpenHistory}
-            startIcon={<History className="h-4 w-4" />}
-          >
-            查看本机历史
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={onOpenHistory}
+              startIcon={<History className="h-4 w-4" />}
+            >
+              查看本机历史
+            </Button>
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={onOpenSettings}
+              startIcon={<Settings className="h-4 w-4" />}
+            >
+              设置
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-8 shadow-lg">

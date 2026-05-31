@@ -63,6 +63,7 @@ export default function App() {
         <PRAnalyzer
           onAnalyze={handleAnalyze}
           onOpenHistory={() => router.push('/history')}
+          onOpenSettings={() => router.push('/settings')}
           loading={analyzing}
         />
         <Snackbar
