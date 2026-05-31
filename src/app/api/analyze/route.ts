@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analysisCache } from '@/lib/cache';
 import { collectDeepContext, collectQuickContext, collectStandardContext } from '@/lib/context';
-import { findCachedAnalysis, startAnalysisRun, completeAnalysisRun, failAnalysisRun } from '@/lib/analysis-store';
+import { findCachedAnalysis, findLatestAnalysisByPR, startAnalysisRun, completeAnalysisRun, failAnalysisRun } from '@/lib/analysis-store';
 import { fetchPRInfo, parsePRUrl, setGitHubToken, clearGitHubToken } from '@/lib/github';
 import { composeSystemPrompt, createPromptConfig } from '@/lib/prompts';
 import { checkConsistency } from '@/lib/validation/consistency';
@@ -64,19 +64,18 @@ export async function POST(request: NextRequest) {
     const prInfo = await fetchPRInfo(owner, repo, prNumber);
     const cacheKey = buildCacheKey(owner, repo, prNumber, prInfo.headSha, depth);
 
-    // 获取最新的缓存结果
+    // 获取当前 depth 对应的缓存结果
     const latestCached = (analysisCache.get(cacheKey) as AnalysisResponse | null) ?? (await findCachedAnalysis(cacheKey));
 
-    // 二次审查模式：基于最新缓存进行迭代分析
+    // 二次审查模式：不受 depth 限制，查找该 PR 最新的任意一次成功分析
     let previousAnalysis: AnalysisResponse | null = null;
     if (reviewMode) {
-      if (latestCached) {
-        previousAnalysis = latestCached;
-        console.log(`[Review Mode] 基于最新缓存进行二次审查，分析 ID: ${latestCached.analysisRunId}`);
-      } else {
+      previousAnalysis = latestCached ?? (await findLatestAnalysisByPR(owner, repo, prNumber));
+      if (!previousAnalysis) {
         clearGitHubToken();
         return errorResponse('未找到可用于二次审查的分析结果，请先进行初次分析', 'NOT_FOUND', 404);
       }
+      console.log(`[Review Mode] 基于分析结果进行二次审查，分析 ID: ${previousAnalysis.analysisRunId}，depth: ${previousAnalysis.depth}`);
     } else {
       // 非二次审查模式：如果有缓存且非流式，直接返回
       if (latestCached && !useStreaming) {
