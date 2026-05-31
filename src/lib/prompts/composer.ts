@@ -7,6 +7,7 @@ import { BASE_SYSTEM_PROMPT } from './system-base';
 import { COT_INSTRUCTIONS } from './cot-instructions';
 import { SMALL_PR_EXAMPLE, LARGE_PR_EXAMPLE } from './few-shot/examples';
 import { getInstructionsForFiles } from './language-specific/index';
+import { FAST_MODE_INSTRUCTIONS } from './fast-mode-instructions';
 import type { FileChange } from '@/types/analysis';
 
 export interface PromptConfig {
@@ -89,7 +90,7 @@ export function createPromptConfig(
         filePaths,
         includeCoT: false,
         includeFewShot: false,
-        customInstructions,
+        customInstructions: FAST_MODE_INSTRUCTIONS,
         diffTruncated,
       };
 
