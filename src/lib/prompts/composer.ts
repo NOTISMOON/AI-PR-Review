@@ -8,6 +8,8 @@ import { COT_INSTRUCTIONS } from './cot-instructions';
 import { SMALL_PR_EXAMPLE, LARGE_PR_EXAMPLE } from './few-shot/examples';
 import { getInstructionsForFiles } from './language-specific/index';
 import { FAST_MODE_INSTRUCTIONS } from './fast-mode-instructions';
+import { STANDARD_MODE_INSTRUCTIONS } from './standard-mode-instructions';
+import { DEEP_MODE_INSTRUCTIONS } from './deep-mode-instructions';
 import type { FileChange } from '@/types/analysis';
 
 export interface PromptConfig {
@@ -57,12 +59,19 @@ export function composeSystemPrompt(config: PromptConfig): string {
     // 2. Standard/Deep mode: Full base prompt
     parts.push(BASE_SYSTEM_PROMPT);
 
-    // 3. Chain-of-Thought (standard + deep)
+    // 3. Mode-specific instructions
+    if (config.depth === 'standard') {
+      parts.push(STANDARD_MODE_INSTRUCTIONS);
+    } else if (config.depth === 'deep') {
+      parts.push(DEEP_MODE_INSTRUCTIONS);
+    }
+
+    // 4. Chain-of-Thought (standard + deep)
     if (config.includeCoT) {
       parts.push(COT_INSTRUCTIONS);
     }
 
-    // 4. Language-specific checks
+    // 5. Language-specific checks
     if (config.filePaths.length > 0) {
       const langInstructions = getInstructionsForFiles(config.filePaths);
       if (langInstructions) {
@@ -70,7 +79,7 @@ export function composeSystemPrompt(config: PromptConfig): string {
       }
     }
 
-    // 5. Few-shot examples (standard + deep)
+    // 6. Few-shot examples (standard + deep)
     if (config.includeFewShot) {
       parts.push(SMALL_PR_EXAMPLE);
       if (config.depth === 'deep') {
@@ -78,7 +87,7 @@ export function composeSystemPrompt(config: PromptConfig): string {
       }
     }
 
-    // 6. Custom instructions (e.g., user-defined rules)
+    // 7. Custom instructions (e.g., user-defined rules)
     if (config.customInstructions) {
       parts.push(config.customInstructions);
     }
@@ -134,7 +143,7 @@ export function createPromptConfig(
         filePaths,
         includeCoT: true,
         includeFewShot: true,
-        customInstructions: (customInstructions || '') + '\n\n## 深度审查模式\n\n这是深度审查，请更加仔细地检查以下方面：\n- 跨文件依赖的兼容性\n- 全局状态的变更影响\n- 安全上下文中的敏感操作\n- 长期维护性影响\n请为每个发现提供更加详细的 justification。',
+        customInstructions,
         diffTruncated,
       };
   }
