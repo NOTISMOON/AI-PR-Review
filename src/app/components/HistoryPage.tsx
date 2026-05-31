@@ -194,7 +194,7 @@ export default function HistoryPage({
                         variant="outlined"
                         onClick={() => handleReanalyzeClick(entry)}
                         startIcon={<RefreshCw className="h-4 w-4" />}
-                        disabled={busyId === entry.analysisRunId}
+                        disabled={busyId !== null}
                       >
                         {busyId === entry.analysisRunId ? (
                           <>
@@ -290,7 +290,7 @@ export default function HistoryPage({
           <Button onClick={handleCloseDialog} color="inherit">
             取消
           </Button>
-          <Button onClick={handleConfirmReanalyze} variant="contained" color="primary">
+          <Button onClick={handleConfirmReanalyze} variant="contained" color="primary" disabled={busyId !== null}>
             开始分析
           </Button>
         </DialogActions>
