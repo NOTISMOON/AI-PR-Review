@@ -7,6 +7,7 @@ import { BASE_SYSTEM_PROMPT } from './system-base';
 import { COT_INSTRUCTIONS } from './cot-instructions';
 import { SMALL_PR_EXAMPLE, LARGE_PR_EXAMPLE } from './few-shot/examples';
 import { getInstructionsForFiles } from './language-specific/index';
+import { FAST_MODE_INSTRUCTIONS } from './fast-mode-instructions';
 import type { FileChange } from '@/types/analysis';
 
 export interface PromptConfig {
@@ -30,36 +31,60 @@ export interface PromptConfig {
 export function composeSystemPrompt(config: PromptConfig): string {
   const parts: string[] = [];
 
-  // 1. Base persona + review criteria (always included)
-  parts.push(BASE_SYSTEM_PROMPT);
+  // 1. Fast mode: ONLY fast mode instructions (override base prompt)
+  if (config.depth === 'fast') {
+    parts.push(FAST_MODE_INSTRUCTIONS);
 
-  // 2. Chain-of-Thought (standard + deep)
-  if (config.includeCoT && config.depth !== 'fast') {
-    parts.push(COT_INSTRUCTIONS);
-  }
+    // Add minimal base rules for JSON format only
+    parts.push(`
+## 输出格式（必须遵守）
 
-  // 3. Language-specific checks
-  if (config.filePaths.length > 0) {
-    const langInstructions = getInstructionsForFiles(config.filePaths);
-    if (langInstructions) {
-      parts.push(langInstructions);
+返回严格的 JSON 对象：
+
+{
+  "summary": "PR 变更的简洁中文总结",
+  "riskLevel": "low" | "medium" | "high",
+  "risks": [],
+  "reviewComments": []
+}
+
+**JSON 格式要求：**
+- 所有字符串必须正确转义
+- 不要在字符串中使用未转义的双引号
+- 不要在字符串中使用未转义的换行符（使用 \\n 代替）
+`);
+  } else {
+    // 2. Standard/Deep mode: Full base prompt
+    parts.push(BASE_SYSTEM_PROMPT);
+
+    // 3. Chain-of-Thought (standard + deep)
+    if (config.includeCoT) {
+      parts.push(COT_INSTRUCTIONS);
+    }
+
+    // 4. Language-specific checks
+    if (config.filePaths.length > 0) {
+      const langInstructions = getInstructionsForFiles(config.filePaths);
+      if (langInstructions) {
+        parts.push(langInstructions);
+      }
+    }
+
+    // 5. Few-shot examples (standard + deep)
+    if (config.includeFewShot) {
+      parts.push(SMALL_PR_EXAMPLE);
+      if (config.depth === 'deep') {
+        parts.push(LARGE_PR_EXAMPLE);
+      }
+    }
+
+    // 6. Custom instructions (e.g., user-defined rules)
+    if (config.customInstructions) {
+      parts.push(config.customInstructions);
     }
   }
 
-  // 4. Few-shot examples (standard + deep)
-  if (config.includeFewShot && config.depth !== 'fast') {
-    parts.push(SMALL_PR_EXAMPLE);
-    if (config.depth === 'deep') {
-      parts.push(LARGE_PR_EXAMPLE);
-    }
-  }
-
-  // 5. Custom instructions (e.g., user-defined rules)
-  if (config.customInstructions) {
-    parts.push(config.customInstructions);
-  }
-
-  // 6. Truncation notice (if applicable)
+  // 7. Truncation notice (if applicable)
   if (config.diffTruncated) {
     parts.push(`
 ## 注意
@@ -89,7 +114,7 @@ export function createPromptConfig(
         filePaths,
         includeCoT: false,
         includeFewShot: false,
-        customInstructions,
+        customInstructions: FAST_MODE_INSTRUCTIONS,
         diffTruncated,
       };
 

@@ -35,10 +35,33 @@ function repairJSON(raw: string): string {
   // 2. 修复属性名缺少引号（如 { foo: "bar" } → { "foo": "bar" }）
   fixed = fixed.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
 
-  // 3. 修复字符串值内未转义的换行符（在双引号字符串内）
-  fixed = fixed.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (_match, content) => {
-    const escaped = content.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+  // 3. 修复字符串值内未转义的引号和换行符
+  // 这是一个更健壮的字符串修复逻辑
+  fixed = fixed.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content) => {
+    // 如果字符串内容看起来已经正确转义，直接返回
+    if (!content.includes('\n') && !content.includes('\r') && !content.includes('\t')) {
+      return match;
+    }
+
+    // 转义换行符和制表符
+    let escaped = content
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+
     return `"${escaped}"`;
+  });
+
+  // 4. 修复字符串中未转义的双引号（但保留已转义的）
+  // 匹配 "..." 字符串，查找其中未转义的引号
+  fixed = fixed.replace(/"([^"]*(?:\\"[^"]*)*)"/g, (match, content) => {
+    // 临时替换已转义的引号
+    const temp = content.replace(/\\"/g, '\x00');
+    // 转义未转义的引号
+    const escaped = temp.replace(/"/g, '\\"');
+    // 恢复已转义的引号
+    const restored = escaped.replace(/\x00/g, '\\"');
+    return `"${restored}"`;
   });
 
   return fixed;
