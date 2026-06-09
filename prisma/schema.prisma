@@ -89,7 +89,7 @@ model PullRequest {
 model AnalysisRun {
   id             String                  @id @default(cuid())
   pullRequestId  String
-  cacheKey       String                  @unique
+  cacheKey       String
   status         AnalysisStatus
   depth          AnalysisDepth
   summary        String?
@@ -113,6 +113,7 @@ model AnalysisRun {
 
   @@index([pullRequestId, createdAt])
   @@index([status, createdAt])
+  @@index([cacheKey, createdAt])
 }
 
 model AnalysisRisk {

@@ -17,9 +17,10 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Switch,
   CircularProgress,
 } from '@mui/material';
-import type { LocalAnalysisHistoryEntry } from '@/types/analysis';
+import type { LocalAnalysisHistoryEntry } from '@/styles/types/analysis';
 
 interface HistoryPageProps {
   entries: LocalAnalysisHistoryEntry[];
@@ -27,7 +28,7 @@ interface HistoryPageProps {
   onOpen: (entry: LocalAnalysisHistoryEntry) => void;
   onDelete: (analysisRunId: string) => void;
   onClear: () => void;
-  onReanalyze: (entry: LocalAnalysisHistoryEntry, depth: string) => void;
+  onReanalyze: (entry: LocalAnalysisHistoryEntry, depth: string, reviewMode: boolean) => void;
   busyId?: string | null;
 }
 
@@ -65,6 +66,7 @@ export default function HistoryPage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<LocalAnalysisHistoryEntry | null>(null);
   const [selectedDepth, setSelectedDepth] = useState<string>('standard');
+  const [reviewMode, setReviewMode] = useState(true);
 
   const hasEntries = entries.length > 0;
   const summary = useMemo(() => {
@@ -90,7 +92,7 @@ export default function HistoryPage({
 
   const handleConfirmReanalyze = () => {
     if (selectedEntry) {
-      onReanalyze(selectedEntry, selectedDepth);
+      onReanalyze(selectedEntry, selectedDepth, reviewMode);
       setDialogOpen(false);
     }
   };
@@ -282,6 +284,25 @@ export default function HistoryPage({
                     />
                   </div>
                 </RadioGroup>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={reviewMode}
+                      onChange={(e) => setReviewMode(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">二次审查模式</div>
+                      <div className="text-xs text-slate-500">
+                        基于上次分析结果进行验证和补充。关闭则进行全新的独立分析。
+                      </div>
+                    </div>
+                  }
+                />
               </div>
             </div>
           )}

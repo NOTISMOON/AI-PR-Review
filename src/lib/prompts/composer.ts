@@ -10,7 +10,7 @@ import { getInstructionsForFiles } from './language-specific/index';
 import { FAST_MODE_INSTRUCTIONS } from './fast-mode-instructions';
 import { STANDARD_MODE_INSTRUCTIONS } from './standard-mode-instructions';
 import { DEEP_MODE_INSTRUCTIONS } from './deep-mode-instructions';
-import type { FileChange } from '@/types/analysis';
+import type { FileChange } from '@/styles/types/analysis';
 
 export interface PromptConfig {
   /** Analysis depth: fast (skip examples), standard, or deep (full CoT + examples) */
@@ -55,6 +55,11 @@ export function composeSystemPrompt(config: PromptConfig): string {
 - 不要在字符串中使用未转义的双引号
 - 不要在字符串中使用未转义的换行符（使用 \\n 代替）
 `);
+
+    // 6. Custom instructions (e.g., review mode context, user-defined rules)
+    if (config.customInstructions) {
+      parts.push(config.customInstructions);
+    }
   } else {
     // 2. Standard/Deep mode: Full base prompt
     parts.push(BASE_SYSTEM_PROMPT);
@@ -123,7 +128,7 @@ export function createPromptConfig(
         filePaths,
         includeCoT: false,
         includeFewShot: false,
-        customInstructions: FAST_MODE_INSTRUCTIONS,
+        customInstructions,
         diffTruncated,
       };
 

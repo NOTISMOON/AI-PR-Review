@@ -4,27 +4,24 @@ export function parsePRUrl(prUrl: string): { owner: string; repo: string; prNumb
   return { owner: match[1], repo: match[2], prNumber: parseInt(match[3], 10) };
 }
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 const GITHUB_API_BASE = 'https://api.github.com';
 
 // File content cache to avoid duplicate fetches
 const fileContentCache = new Map<string, Promise<string | null>>();
 
-// Store the current GitHub token for this request context
-let currentGitHubToken: string | undefined;
+// Per-request GitHub token, isolated via AsyncLocalStorage so concurrent
+// requests never overwrite or clear each other's token.
+const githubTokenStore = new AsyncLocalStorage<{ token?: string }>();
 
 /**
- * Set the GitHub token for the current request context.
- * This should be called at the start of each API request.
+ * Run `fn` with the given GitHub token bound to the current async context.
+ * Every GitHub fetch made within `fn` (including across awaits) reads this
+ * token; nothing leaks to sibling requests.
  */
-export function setGitHubToken(token: string | undefined) {
-  currentGitHubToken = token;
-}
-
-/**
- * Clear the GitHub token after the request is complete.
- */
-export function clearGitHubToken() {
-  currentGitHubToken = undefined;
+export function runWithGitHubToken<T>(token: string | undefined, fn: () => T): T {
+  return githubTokenStore.run({ token }, fn);
 }
 
 function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
@@ -33,9 +30,10 @@ function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, s
     'User-Agent': 'ai-pr-review-tool/1.0',
     ...extraHeaders,
   };
-  // Use token from request context only
-  if (currentGitHubToken) {
-    headers.Authorization = `Bearer ${currentGitHubToken}`;
+  // Use token from the current request context only
+  const token = githubTokenStore.getStore()?.token;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
   return headers;
 }

@@ -2,7 +2,7 @@
  * Helper functions for building context snapshots
  */
 
-import type { CollectedContext, AnalysisContextSnapshotData } from '@/types/analysis';
+import type { CollectedContext, AnalysisContextSnapshotData } from '@/styles/types/analysis';
 
 export function buildContextSnapshot(collected: CollectedContext, diffTruncated: boolean): AnalysisContextSnapshotData {
   return {

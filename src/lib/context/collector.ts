@@ -6,7 +6,7 @@
  * It coordinates fetching, extraction, and prioritization.
  */
 
-import type { PRInfo, FileChange, CommitInfo, CollectedContext, DependencyGraph, FileWithContext, RelatedFile } from '@/types/analysis';
+import type { PRInfo, FileChange, CommitInfo, CollectedContext, DependencyGraph, FileWithContext, RelatedFile } from '@/styles/types/analysis';
 import {
   fetchPRInfo, fetchPRDiff, fetchPRFiles,
   fetchPRCommits, fetchPRComments, fetchRepoTree, fetchConfigFile,

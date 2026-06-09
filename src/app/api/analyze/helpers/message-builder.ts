@@ -2,7 +2,7 @@
  * Helper functions for building user messages for AI analysis
  */
 
-import type { CollectedContext } from '@/types/analysis';
+import type { CollectedContext } from '@/styles/types/analysis';
 
 export async function buildUserMessage(
   collected: Awaited<ReturnType<any>>,

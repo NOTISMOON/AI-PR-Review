@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Alert, AlertTitle, Button, CircularProgress } from '@mui/material';
 import AnalysisResults from '@/app/components/AnalysisResults';
 import { getLocalHistoryEntry, saveLocalHistoryEntry } from '@/lib/local-history';
-import type { AnalysisResponse } from '@/types/analysis';
+import type { AnalysisResponse } from '@/styles/types/analysis';
 
 export default function AnalysisDetailPage() {
   const params = useParams<{ id: string }>();

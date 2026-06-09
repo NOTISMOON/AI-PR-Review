@@ -23,19 +23,34 @@ import {
   LinearProgress,
   TextField,
 } from '@mui/material';
-import type { AnalyzeRequest } from '@/types/analysis';
+import type { AnalyzeRequest } from '@/styles/types/analysis';
+
+export interface AnalyzeProgress {
+  phase: 'fetching' | 'analyzing' | 'validating';
+  message: string;
+  riskCount: number;
+  commentCount: number;
+  hasSummary: boolean;
+}
 
 interface PRAnalyzerProps {
   onAnalyze: (prUrl: string, options?: Partial<AnalyzeRequest>) => void;
   onOpenHistory: () => void;
   onOpenSettings: () => void;
   loading: boolean;
+  progress?: AnalyzeProgress | null;
   hasModel?: boolean;
   initialPrUrl?: string;
   initialDepth?: AnalysisDepth;
 }
 
 type AnalysisDepth = 'fast' | 'standard' | 'deep';
+
+const PHASE_STEPS: { key: AnalyzeProgress['phase']; label: string }[] = [
+  { key: 'fetching', label: '拉取变更' },
+  { key: 'analyzing', label: '模型分析' },
+  { key: 'validating', label: '校验整理' },
+];
 
 const depthOptions: { value: AnalysisDepth; label: string; icon: ReactNode; desc: string; time: string }[] = [
   {
@@ -100,7 +115,7 @@ const DepthOption = React.memo(({ option, isSelected, onSelect, disabled }: Dept
 
 DepthOption.displayName = 'DepthOption';
 
-export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, loading, hasModel = true, initialPrUrl, initialDepth }: PRAnalyzerProps) {
+export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, loading, progress, hasModel = true, initialPrUrl, initialDepth }: PRAnalyzerProps) {
   const [prUrl, setPrUrl] = useState(initialPrUrl ?? '');
   const [depth, setDepth] = useState<AnalysisDepth>(initialDepth ?? 'standard');
 
@@ -206,7 +221,67 @@ export default function PRAnalyzer({ onAnalyze, onOpenHistory, onOpenSettings, l
             {loading && (
               <div className="mt-6">
                 <LinearProgress />
-                <p className="mt-2 text-center text-slate-600">正在抓取代码变更并执行 AI 分析...</p>
+                <p className="mt-3 text-center text-slate-600">
+                  {progress?.message ?? '正在抓取代码变更并执行 AI 分析...'}
+                </p>
+
+                <div className="mx-auto mt-4 flex max-w-md items-center justify-between">
+                  {PHASE_STEPS.map((step, index) => {
+                    const activeIndex = progress
+                      ? PHASE_STEPS.findIndex((s) => s.key === progress.phase)
+                      : 0;
+                    const isDone = index < activeIndex;
+                    const isActive = index === activeIndex;
+                    return (
+                      <React.Fragment key={step.key}>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                              isDone
+                                ? 'bg-emerald-500 text-white'
+                                : isActive
+                                  ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-400'
+                                  : 'bg-slate-100 text-slate-400'
+                            }`}
+                          >
+                            {isDone ? '✓' : index + 1}
+                          </div>
+                          <span
+                            className={`text-xs ${
+                              isActive ? 'font-medium text-emerald-700' : 'text-slate-500'
+                            }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                        {index < PHASE_STEPS.length - 1 && (
+                          <div
+                            className={`mx-1 h-0.5 flex-1 rounded transition-colors ${
+                              index < activeIndex ? 'bg-emerald-400' : 'bg-slate-200'
+                            }`}
+                          />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                {progress && (progress.riskCount > 0 || progress.commentCount > 0) && (
+                  <div className="mt-4 flex justify-center gap-2">
+                    <Chip
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      label={`已发现风险 ${progress.riskCount}`}
+                    />
+                    <Chip
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      label={`审查评论 ${progress.commentCount}`}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

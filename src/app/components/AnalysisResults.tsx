@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Alert, AlertTitle, Card, CardContent, Chip } from '@mui/material';
 import { useState } from 'react';
-import type { AnalysisResponse, Risk } from '@/types/analysis';
+import type { AnalysisResponse, Risk } from '@/styles/types/analysis';
 
 interface AnalysisResultsProps {
   data: AnalysisResponse;

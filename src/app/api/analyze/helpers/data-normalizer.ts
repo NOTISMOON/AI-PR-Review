@@ -2,7 +2,7 @@
  * Helper functions for normalizing and building analysis data
  */
 
-import type { AnalysisData, AnalysisResponse, Risk, ReviewComment } from '@/types/analysis';
+import type { AnalysisData, AnalysisResponse, Risk, ReviewComment } from '@/styles/types/analysis';
 
 export function normalizeAnalysisData(
   raw: Record<string, unknown>,

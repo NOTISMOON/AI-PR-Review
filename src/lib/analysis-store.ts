@@ -15,7 +15,7 @@ import type {
   FileChange,
   ReviewComment,
   Risk,
-} from '@/types/analysis';
+} from '@/styles/types/analysis';
 
 type AnalyzeDepth = 'fast' | 'standard' | 'deep';
 
@@ -241,26 +241,45 @@ function toAnalysisResponse(run: PersistedAnalysisRun): AnalysisResponse {
   };
 }
 
+/**
+ * 检查是否有正在运行中的分析（相同 cacheKey），防止并发重复请求。
+ */
+export async function findRunningAnalysis(cacheKey: string) {
+  const run = await prisma.analysisRun.findFirst({
+    where: { cacheKey, status: AnalysisStatus.RUNNING },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (run) {
+    return { analysisRunId: run.id };
+  }
+  return null;
+}
+
 export async function findCachedAnalysis(cacheKey: string) {
-  const run = await prisma.analysisRun.findUnique({
-    where: { cacheKey },
+  const run = await prisma.analysisRun.findFirst({
+    where: { cacheKey, status: AnalysisStatus.SUCCEEDED },
+    orderBy: { createdAt: 'desc' },
     include: analysisInclude,
   });
 
-  if (!run || run.status !== AnalysisStatus.SUCCEEDED) {
+  if (!run) {
     return null;
   }
 
   return toAnalysisResponse(run);
 }
 
-export async function findLatestAnalysisByPR(owner: string, repo: string, prNumber: number) {
+export async function findLatestAnalysisByPR(owner: string, repo: string, prNumber: number, headSha?: string) {
+  // 优先匹配同 headSha（PR 内容未变），否则取最新一次成功分析
   const run = await prisma.analysisRun.findFirst({
     where: {
       status: AnalysisStatus.SUCCEEDED,
       pullRequest: {
         number: prNumber,
         repository: { owner, name: repo },
+        ...(headSha ? { headSha } : {}),
       },
     },
     orderBy: { completedAt: 'desc' },
@@ -345,24 +364,8 @@ export async function startAnalysisRun(params: {
     },
   });
 
-  return prisma.analysisRun.upsert({
-    where: { cacheKey },
-    update: {
-      pullRequestId: pullRequest.id,
-      status: AnalysisStatus.RUNNING,
-      depth: toPrismaDepth(depth),
-      summary: null,
-      riskLevel: null,
-      modelUsed: null,
-      provider: null,
-      latencyMs: null,
-      inputTokens: null,
-      outputTokens: null,
-      errorCode: null,
-      errorMessage: null,
-      completedAt: null,
-    },
-    create: {
+  return prisma.analysisRun.create({
+    data: {
       cacheKey,
       status: AnalysisStatus.RUNNING,
       depth: toPrismaDepth(depth),

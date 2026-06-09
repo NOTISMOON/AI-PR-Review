@@ -45,6 +45,45 @@ const VALID_COMMENT_TYPES = new Set(['positive', 'suggestion', 'concern']);
 const VALID_CATEGORIES = new Set(['security', 'logic', 'performance', 'quality', 'architecture']);
 
 /**
+ * Sanitize raw AI output before validation: auto-generate missing IDs,
+ * default invalid enums.  This prevents a whole analysis from being
+ * discarded just because the AI missed a formatting detail.
+ */
+function sanitize(raw: Record<string, unknown>): Record<string, unknown> {
+  const obj = { ...raw };
+
+  // Sanitize risks
+  if (Array.isArray(obj.risks)) {
+    obj.risks = (obj.risks as Record<string, unknown>[]).map((r, i) => {
+      const risk = { ...r };
+      if (typeof risk.id !== 'string' || !risk.id) risk.id = `risk-${i + 1}`;
+      if (typeof risk.severity !== 'string' || !VALID_SEVERITIES.has(risk.severity)) risk.severity = 'medium';
+      if (typeof risk.confidence !== 'string' || !VALID_CONFIDENCES.has(risk.confidence)) risk.confidence = 'medium';
+      if (typeof risk.title !== 'string') risk.title = String(risk.title ?? '');
+      if (typeof risk.description !== 'string') risk.description = String(risk.description ?? '');
+      if (typeof risk.file !== 'string') risk.file = String(risk.file ?? '');
+      if (risk.line === undefined || risk.line === null || typeof risk.line !== 'number') risk.line = 0;
+      if (typeof risk.code !== 'string') risk.code = String(risk.code ?? '');
+      if (typeof risk.suggestion !== 'string') risk.suggestion = String(risk.suggestion ?? '');
+      return risk;
+    });
+  }
+
+  // Sanitize reviewComments
+  if (Array.isArray(obj.reviewComments)) {
+    obj.reviewComments = (obj.reviewComments as Record<string, unknown>[]).map((c, i) => {
+      const comment = { ...c };
+      if (typeof comment.id !== 'string' || !comment.id) comment.id = `comment-${i + 1}`;
+      if (typeof comment.type !== 'string' || !VALID_COMMENT_TYPES.has(comment.type)) comment.type = 'suggestion';
+      if (typeof comment.comment !== 'string') comment.comment = String(comment.comment ?? '');
+      return comment;
+    });
+  }
+
+  return obj;
+}
+
+/**
  * Validate AI output against the expected schema.
  */
 export function validateAnalysisOutput(raw: unknown): ValidationResult {
@@ -52,7 +91,8 @@ export function validateAnalysisOutput(raw: unknown): ValidationResult {
     return { success: false, errors: ['响应不是有效的 JSON 对象'] };
   }
 
-  const obj = raw as Record<string, unknown>;
+  // Auto-fix common AI formatting mistakes before validating
+  const obj = sanitize(raw as Record<string, unknown>);
   const errors: string[] = [];
 
   // summary — required string
@@ -71,6 +111,7 @@ export function validateAnalysisOutput(raw: unknown): ValidationResult {
   } else if (obj.risks.length > 15) {
     errors.push('risks: 最多15条');
   } else {
+    // Sanitized risks should always pass — keep this for structural errors
     const riskErrors = validateRisks(obj.risks);
     errors.push(...riskErrors);
   }
@@ -81,6 +122,7 @@ export function validateAnalysisOutput(raw: unknown): ValidationResult {
   } else if (obj.reviewComments.length === 0) {
     errors.push('reviewComments: 至少需要1条审查意见');
   } else {
+    // Sanitized comments should always pass — keep this for structural errors
     const commentErrors = validateReviewComments(obj.reviewComments);
     errors.push(...commentErrors);
   }

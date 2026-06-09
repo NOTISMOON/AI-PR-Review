@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import AnalysisTasksWatcher from "@/app/components/AnalysisTasksWatcher";
 import "../../styles/index.css";
 
 export const metadata: Metadata = {
@@ -14,7 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <AnalysisTasksWatcher />
+      </body>
     </html>
   );
 }

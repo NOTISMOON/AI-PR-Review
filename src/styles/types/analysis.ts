@@ -163,6 +163,7 @@ export interface AnalyzeRequest {
   githubToken?: string;
   customModels?: CustomModelConfig[];
   reviewMode?: boolean; // 二次审查模式：基于最新缓存结果进行迭代分析
+  skipCache?: boolean;  // 跳过缓存，强制重新分析
 }
 
 export interface AnalyzeError {
@@ -176,7 +177,8 @@ export interface AnalyzeError {
     | 'AI_CONFIG_ERROR'
     | 'RATE_LIMIT'
     | 'NOT_FOUND'
-    | 'INTERNAL_ERROR';
+    | 'INTERNAL_ERROR'
+    | 'ANALYSIS_RUNNING';
 }
 
 export interface SSEProgressEvent {
@@ -195,12 +197,14 @@ export interface SSEPartialEvent {
 
 export interface SSECompleteEvent {
   type: 'complete';
+  analysisRunId: string;
   riskLevel: 'low' | 'medium' | 'high';
   totalRisks: number;
   totalComments: number;
   modelUsed: string;
   latencyMs: number;
   usage?: { inputTokens: number; outputTokens: number };
+  response: AnalysisResponse;
 }
 
 export interface SSEErrorEvent {

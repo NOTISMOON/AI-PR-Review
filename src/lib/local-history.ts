@@ -1,4 +1,4 @@
-import type { AnalysisResponse, LocalAnalysisHistoryEntry } from '@/types/analysis';
+import type { AnalysisResponse, LocalAnalysisHistoryEntry } from '@/styles/types/analysis';
 
 const STORAGE_KEY = 'ai-review-history';
 const MAX_HISTORY_ITEMS = 25;

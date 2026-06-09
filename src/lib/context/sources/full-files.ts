@@ -7,7 +7,7 @@
  * understand the intent and impact of changes.
  */
 
-import type { FileChange, FileWithContext, SurroundingBlock } from '@/types/analysis';
+import type { FileChange, FileWithContext, SurroundingBlock } from '@/styles/types/analysis';
 import { fetchFileContent } from '@/lib/github';
 
 /**

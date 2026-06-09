@@ -4,7 +4,7 @@
  */
 
 import type { AnalysisOutput, ValidatedRisk } from './schema';
-import type { FileChange } from '@/types/analysis';
+import type { FileChange } from '@/styles/types/analysis';
 
 export interface ConsistencyIssue {
   type: 'file_not_in_changes' | 'duplicate_risk' | 'severity_mismatch' | 'suspicious_risk_count' | 'confidence_severity_gap';

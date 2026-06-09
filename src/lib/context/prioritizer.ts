@@ -3,7 +3,7 @@
  * Ensures security-sensitive and high-impact files get more context budget.
  */
 
-import type { FileChange } from '@/types/analysis';
+import type { FileChange } from '@/styles/types/analysis';
 
 /** Paths that indicate security-sensitive code */
 const SECURITY_PATTERNS = [

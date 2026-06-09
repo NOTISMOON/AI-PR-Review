@@ -3,7 +3,7 @@
  * to enable cross-file impact analysis.
  */
 
-import type { DependencyGraph, DependencyEdge, FileChange } from '@/types/analysis';
+import type { DependencyGraph, DependencyEdge, FileChange } from '@/styles/types/analysis';
 
 /** Regex patterns for import statements by language */
 const IMPORT_PATTERNS: Record<string, RegExp> = {

@@ -9,7 +9,7 @@
  * validation function... which middleware calls it? Are the tests updated?"
  */
 
-import type { PRInfo, CommitInfo, FileChange, RelatedFile, AIRetrievalResult } from '@/types/analysis';
+import type { PRInfo, CommitInfo, FileChange, RelatedFile, AIRetrievalResult } from '@/styles/types/analysis';
 import { getBestAvailableModel, getProviderForModel } from '@/lib/models';
 import { fetchFileContent } from '@/lib/github';
 import { findBlockStarts } from './full-files';
