@@ -161,22 +161,28 @@ function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) 
 
           {data.modelUsed && (
             <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1">
-                <Zap className="h-3 w-3" />
-                {data.provider}/{data.modelUsed}
-              </span>
-              {data.depth && <span>{data.depth.toUpperCase()}</span>}
-              {data.latencyMs && (
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {(data.latencyMs / 1000).toFixed(1)}s
-                </span>
-              )}
-              {data.tokenUsage && (
-                <span className="flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  {(data.tokenUsage.inputTokens + data.tokenUsage.outputTokens).toLocaleString()} tokens
-                </span>
+              {data.cacheHit ? (
+                <Chip label="缓存命中" size="small" color="success" variant="outlined" />
+              ) : (
+                <>
+                  <span className="flex items-center gap-1">
+                    <Zap className="h-3 w-3" />
+                    {data.provider}/{data.modelUsed}
+                  </span>
+                  {data.depth && <span>{data.depth.toUpperCase()}</span>}
+                  {data.latencyMs && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {(data.latencyMs / 1000).toFixed(1)}s
+                    </span>
+                  )}
+                  {data.tokenUsage && (
+                    <span className="flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      {(data.tokenUsage.inputTokens + data.tokenUsage.outputTokens).toLocaleString()} tokens
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}

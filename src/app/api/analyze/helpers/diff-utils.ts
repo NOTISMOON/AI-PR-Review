@@ -27,6 +27,7 @@ export function truncateDiffSmart(diff: string, maxSize: number): { effectiveDif
   };
 }
 
-export function buildCacheKey(owner: string, repo: string, prNumber: number, headSha: string, depth: string) {
-  return `analysis:${owner}:${repo}:${prNumber}:${headSha}:${depth}`;
+export function buildCacheKey(owner: string, repo: string, prNumber: number, headSha: string, depth: string, reviewMode?: boolean) {
+  const base = `analysis:${owner}:${repo}:${prNumber}:${headSha}:${depth}`;
+  return reviewMode ? `${base}:review` : base;
 }

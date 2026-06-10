@@ -66,7 +66,7 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
     const useStreaming = request.headers.get('accept') === 'text/event-stream';
 
     const prInfo = await fetchPRInfo(owner, repo, prNumber);
-    const cacheKey = buildCacheKey(owner, repo, prNumber, prInfo.headSha, depth);
+    const cacheKey = buildCacheKey(owner, repo, prNumber, prInfo.headSha, depth, reviewMode);
 
     // 并发保护：同一 cacheKey 不允许同时运行多个分析
     const running = await findRunningAnalysis(cacheKey);
@@ -94,9 +94,8 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
       const cachedResponse: AnalysisResponse = {
         ...latestCached,
         cacheHit: true,
-        analyzedAt: new Date().toISOString(),
-        latencyMs: 0,
-        tokenUsage: { inputTokens: 0, outputTokens: 0 },
+        latencyMs: undefined,
+        tokenUsage: undefined,
       };
       analysisCache.set(cacheKey, cachedResponse);
 
@@ -114,7 +113,7 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
                   totalRisks: cachedResponse.risks.length,
                   totalComments: cachedResponse.reviewComments.length,
                   modelUsed: cachedResponse.modelUsed,
-                  latencyMs: 0,
+                  latencyMs: cachedResponse.latencyMs ?? 0,
                   response: cachedResponse,
                 })}\n\n`,
               ),
