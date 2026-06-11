@@ -179,7 +179,7 @@ const PHASE_MESSAGES: Record<AnalyzeProgress['phase'], string> = {
 
 async function executeAnalysis(
   id: string,
-  params: { prUrl: string; depth: string; reviewMode: boolean; skipCache: boolean },
+  params: { prUrl: string; depth: string; reviewMode: boolean; skipCache: boolean; targetEntryId?: string },
 ) {
   // --- 1. fetch + request ---
   const { githubToken, customModels } = readCredentials();
@@ -197,6 +197,7 @@ async function executeAnalysis(
         depth: params.depth as AnalyzeRequest['depth'],
         reviewMode: params.reviewMode,
         skipCache: params.skipCache || undefined,
+        targetAnalysisRunId: params.targetEntryId,
         githubToken,
         customModels,
       } satisfies Partial<AnalyzeRequest>),

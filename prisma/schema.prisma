@@ -92,6 +92,8 @@ model AnalysisRun {
   cacheKey       String
   status         AnalysisStatus
   depth          AnalysisDepth
+  degradedFromReview Boolean            @default(false)
+  degradedReason String?
   summary        String?
   riskLevel      RiskLevel?
   modelUsed      String?

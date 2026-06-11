@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analysisCache } from '@/lib/cache';
 import { collectDeepContext, collectQuickContext, collectStandardContext } from '@/lib/context';
-import { findCachedAnalysis, findLatestAnalysisByPR, findRunningAnalysis, startAnalysisRun, completeAnalysisRun, failAnalysisRun } from '@/lib/analysis-store';
+import { findCachedAnalysis, findLatestAnalysisByPR, findRunningAnalysis, startAnalysisRun, completeAnalysisRun, failAnalysisRun, getAnalysisById } from '@/lib/analysis-store';
 import { fetchPRInfo, parsePRUrl, runWithGitHubToken } from '@/lib/github';
 import { composeSystemPrompt, createPromptConfig } from '@/lib/prompts';
 import { checkConsistency } from '@/lib/validation/consistency';
@@ -62,10 +62,19 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
 
     const { owner, repo, prNumber } = parsed;
     const depth = body.depth || 'standard';
-    const reviewMode = body.reviewMode || false; // 是否为二次审查模式
+    const requestedReviewMode = body.reviewMode || false;
     const useStreaming = request.headers.get('accept') === 'text/event-stream';
 
     const prInfo = await fetchPRInfo(owner, repo, prNumber);
+    const reviewContext = await resolveReviewContext({
+      owner,
+      repo,
+      prNumber,
+      prInfo,
+      requestedReviewMode,
+      targetAnalysisRunId: body.targetAnalysisRunId,
+    });
+    const { reviewMode, previousAnalysis, degradedFromReview, degradedReason } = reviewContext;
     const cacheKey = buildCacheKey(owner, repo, prNumber, prInfo.headSha, depth, reviewMode);
 
     // 并发保护：同一 cacheKey 不允许同时运行多个分析
@@ -81,22 +90,18 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
     // 获取当前 depth 对应的缓存结果
     const latestCached = (analysisCache.get(cacheKey) as AnalysisResponse | null) ?? (await findCachedAnalysis(cacheKey));
 
-    // 二次审查模式：不受 depth 限制，查找该 PR 最新的任意一次成功分析
-    let previousAnalysis: AnalysisResponse | null = null;
-    if (reviewMode) {
-      previousAnalysis = latestCached ?? (await findLatestAnalysisByPR(owner, repo, prNumber, prInfo.headSha));
-      if (!previousAnalysis) {
-        return errorResponse('未找到可用于二次审查的分析结果，请先进行初次分析', 'NOT_FOUND', 404);
-      }
-      console.log(`[Review Mode] 基于分析结果进行二次审查，分析 ID: ${previousAnalysis.analysisRunId}，depth: ${previousAnalysis.depth}`);
-    } else if (latestCached && !body.skipCache) {
+    if (!reviewMode && latestCached && !body.skipCache) {
       // 非审查模式 + 有缓存 + 未强制跳过 → 直接返回，不走 AI（token 消耗为 0）
-      const cachedResponse: AnalysisResponse = {
-        ...latestCached,
-        cacheHit: true,
-        latencyMs: undefined,
-        tokenUsage: undefined,
-      };
+      const cachedResponse = decorateAnalysisResponseForCurrentRequest(
+        {
+          ...latestCached,
+          cacheHit: true,
+          latencyMs: undefined,
+          tokenUsage: undefined,
+        },
+        degradedFromReview,
+        degradedReason,
+      );
       analysisCache.set(cacheKey, cachedResponse);
 
       if (useStreaming) {
@@ -169,6 +174,8 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
         cacheKey,
         reviewMode,
         previousAnalysis,
+        degradedFromReview,
+        degradedReason,
         provider,
         modelId,
         providerName,
@@ -220,7 +227,8 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
 
       if (parsedOutput && typeof parsedOutput === 'object') {
         // 返回部分结果给用户以便排查，但标记运行失败，避免脏数据污染历史记录
-        response = buildResponse(
+        response = decorateAnalysisResponse(
+          buildResponse(
           normalizeAnalysisData(
             parsedOutput as Record<string, unknown>,
             collected,
@@ -237,6 +245,9 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
             depth,
             contextSnapshot: buildContextSnapshot(collected, diffTruncated),
           },
+          ),
+          degradedFromReview,
+          degradedReason,
         );
         await failIfNeeded(analysisRunId, 'AI_PARSE_ERROR', `AI 响应校验失败: ${errorMessages.join('; ')}`);
         return NextResponse.json(response);
@@ -288,7 +299,7 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
         tokenUsage: result.usage,
       };
 
-      response = buildResponse(analysisData, {
+      const persistedResponse = buildResponse(analysisData, {
         analysisRunId,
         analyzedAt: new Date().toISOString(),
         cacheHit: false,
@@ -296,6 +307,7 @@ async function handleAnalyze(request: NextRequest, body: AnalyzeRequest): Promis
         depth,
         contextSnapshot: buildContextSnapshot(collected, diffTruncated),
       });
+      response = decorateAnalysisResponse(persistedResponse, degradedFromReview, degradedReason);
     }
 
     if (analysisRunId) {
@@ -372,13 +384,15 @@ async function handleStreamingResponse(ctx: {
   cacheKey: string;
   reviewMode: boolean;
   previousAnalysis: AnalysisResponse | null;
+  degradedFromReview: boolean;
+  degradedReason?: string;
   provider: ReturnType<typeof createCustomProvider>;
   modelId: string;
   providerName: string;
   prUrl: string;
   token: string | undefined;
 }): Promise<NextResponse> {
-  const { owner, repo, prNumber, depth, cacheKey, reviewMode, previousAnalysis, provider, modelId, providerName, prUrl, token } = ctx;
+  const { owner, repo, prNumber, depth, cacheKey, reviewMode, previousAnalysis, degradedFromReview, degradedReason, provider, modelId, providerName, prUrl, token } = ctx;
   const startTime = Date.now();
   const encoder = new TextEncoder();
   let accumulatedContent = '';
@@ -508,7 +522,7 @@ async function handleStreamingResponse(ctx: {
           latencyMs,
         );
         const contextSnapshot = buildContextSnapshot(collected, diffTruncated);
-        const response = buildResponse(analysisData, {
+        const persistedResponse = buildResponse(analysisData, {
           analysisRunId,
           analyzedAt: new Date().toISOString(),
           cacheHit: false,
@@ -516,6 +530,7 @@ async function handleStreamingResponse(ctx: {
           depth,
           contextSnapshot,
         });
+        const response = decorateAnalysisResponse(persistedResponse, degradedFromReview, degradedReason);
 
         await completeAnalysisRun({ analysisRunId, data: response, contextSnapshot });
         // DB 写入成功后才更新内存缓存
@@ -559,6 +574,109 @@ function errorResponse(message: string, code: string, status: number): NextRespo
   const error: AnalyzeError = { error: message, code: code as AnalyzeError['code'] };
   return NextResponse.json(error, { status });
 }
+
+async function resolveReviewContext(params: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  prInfo: CollectedContext['prInfo'];
+  requestedReviewMode: boolean;
+  targetAnalysisRunId?: string;
+}) {
+  const { owner, repo, prNumber, prInfo, requestedReviewMode, targetAnalysisRunId } = params;
+
+  if (!requestedReviewMode) {
+    return {
+      reviewMode: false,
+      previousAnalysis: null,
+      degradedFromReview: false,
+      degradedReason: undefined,
+    };
+  }
+
+  // 如果用户指定了目标分析 ID（从历史页点击特定条目），精确匹配
+  let previousAnalysis: AnalysisResponse | null = null;
+  if (targetAnalysisRunId) {
+    previousAnalysis = await getAnalysisById(targetAnalysisRunId);
+    if (!previousAnalysis) {
+      console.log(`[Review Mode] 指定的分析记录 ${targetAnalysisRunId} 不存在或未成功，降级为普通分析`);
+      return {
+        reviewMode: false,
+        previousAnalysis: null,
+        degradedFromReview: true,
+        degradedReason: '指定的历史分析记录不存在或未完成，已自动降级为普通分析。',
+      };
+    }
+   } else {
+    // 未指定目标 → 取该 PR 同 headSha 的最新成功分析
+    previousAnalysis = await findLatestAnalysisByPR(owner, repo, prNumber, prInfo.headSha);
+  }
+
+  if (previousAnalysis) {
+    console.log(
+      `[Review Mode] 基于分析结果进行二次审查，分析 ID: ${previousAnalysis.analysisRunId}，depth: ${previousAnalysis.depth}`,
+    );
+    return {
+      reviewMode: true,
+      previousAnalysis,
+      degradedFromReview: false,
+      degradedReason: undefined,
+    };
+  }
+
+  // 没有匹配的分析结果 → 降级
+  const anyPrevious = await findLatestAnalysisByPR(owner, repo, prNumber);
+  if (anyPrevious) {
+    console.log(
+      `[Review Mode] headSha 变更（当前: ${prInfo.headSha}, 历史: ${anyPrevious.prInfo.headSha}），降级为普通分析`,
+    );
+    return {
+      reviewMode: false,
+      previousAnalysis: null,
+      degradedFromReview: true,
+      degradedReason: 'PR head SHA 已变化，无法基于旧结果做二次审查，本次已自动降级为普通分析。',
+    };
+  }
+
+  console.log('[Review Mode] 未找到历史分析记录，降级为普通分析');
+  return {
+    reviewMode: false,
+    previousAnalysis: null,
+    degradedFromReview: true,
+    degradedReason: '未找到可复用的历史分析结果，本次已自动降级为普通分析。',
+  };
+}
+
+function decorateAnalysisResponse(
+  response: AnalysisResponse,
+  degradedFromReview: boolean,
+  degradedReason?: string,
+): AnalysisResponse {
+  if (!degradedFromReview) {
+    return response;
+  }
+
+  return {
+    ...response,
+    degradedFromReview: true,
+    degradedReason,
+  };
+}
+
+function decorateAnalysisResponseForCurrentRequest(
+  response: AnalysisResponse,
+  degradedFromReview: boolean,
+  degradedReason?: string,
+): AnalysisResponse {
+  const baseResponse: AnalysisResponse = {
+    ...response,
+    degradedFromReview: undefined,
+    degradedReason: undefined,
+  };
+
+  return decorateAnalysisResponse(baseResponse, degradedFromReview, degradedReason);
+}
+
 
 /**
  * 构建二次审查模式的上下文

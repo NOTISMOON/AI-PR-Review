@@ -145,6 +145,10 @@ export interface AnalysisResponse extends AnalysisData {
   analyzedAt?: string;
   prUrl?: string;
   depth?: 'fast' | 'standard' | 'deep';
+  /** 二次审查因 headSha 变更而降级为普通分析 */
+  degradedFromReview?: boolean;
+  /** 降级原因说明 */
+  degradedReason?: string;
   contextSnapshot?: AnalysisContextSnapshotData;
 }
 
@@ -164,6 +168,8 @@ export interface AnalyzeRequest {
   customModels?: CustomModelConfig[];
   reviewMode?: boolean; // 二次审查模式：基于最新缓存结果进行迭代分析
   skipCache?: boolean;  // 跳过缓存，强制重新分析
+  /** 指定二次审查的目标分析 ID，不传则默认取该 PR 最新一次成功分析 */
+  targetAnalysisRunId?: string;
 }
 
 export interface AnalyzeError {

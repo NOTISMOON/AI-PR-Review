@@ -237,6 +237,13 @@ function AnalysisResults({ data, onBack, onShowHistory }: AnalysisResultsProps) 
           </CardContent>
         </Card>
 
+        {data.degradedFromReview && (
+          <Alert severity="warning" className="mb-6 shadow-sm">
+            <AlertTitle>二次审查已自动降级</AlertTitle>
+            {data.degradedReason ?? '当前结果未能沿用历史分析上下文，已按普通分析流程重新执行。'}
+          </Alert>
+        )}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <Card className="shadow-md">

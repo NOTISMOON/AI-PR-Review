@@ -55,14 +55,21 @@ export default function AnalysisTasksWatcher() {
       notifIdCounter += 1;
 
       if (task.status === 'done') {
-        const prefix = task.reviewMode ? '二次审查' : '分析';
         const label = task.prUrl
           ? task.prUrl.split('/').slice(-3).join('/')
           : '未知 PR';
+        const result = task.result;
+        const message = result?.degradedFromReview
+          ? `二次审查不可用，已切换为普通分析（${label}）`
+          : result?.cacheHit
+            ? `已返回缓存分析结果（${label}）`
+            : task.reviewMode
+              ? `二次审查完成（${label}）`
+              : `分析完成（${label}）`;
         incoming.push({
           id: `notif-${notifIdCounter}`,
           taskId: task.id,
-          message: `${prefix}完成（${label}）`,
+          message,
           analysisRunId: task.analysisRunId,
           isError: false,
         });

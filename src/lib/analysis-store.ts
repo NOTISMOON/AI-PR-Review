@@ -194,10 +194,12 @@ function toAnalysisResponse(run: PersistedAnalysisRun): AnalysisResponse {
 
   return {
     analysisRunId: run.id,
-    cacheHit: true,
+    cacheHit: false,
     analyzedAt: (run.completedAt ?? run.createdAt).toISOString(),
     prUrl: buildPrUrl(repository.owner, repository.name, run.pullRequest.number),
     depth: fromPrismaDepth(run.depth),
+    degradedFromReview: run.degradedFromReview,
+    degradedReason: run.degradedReason ?? undefined,
     prInfo,
     summary: run.summary ?? '',
     riskLevel: fromPrismaRiskLevel(run.riskLevel),
@@ -272,7 +274,7 @@ export async function findCachedAnalysis(cacheKey: string) {
 }
 
 export async function findLatestAnalysisByPR(owner: string, repo: string, prNumber: number, headSha?: string) {
-  // 优先匹配同 headSha（PR 内容未变），否则取最新一次成功分析
+  // 严格匹配 headSha：二次审查要求代码内容一致，SHA 不同则视为不匹配
   const run = await prisma.analysisRun.findFirst({
     where: {
       status: AnalysisStatus.SUCCEEDED,
@@ -388,18 +390,38 @@ export async function completeAnalysisRun(params: {
 }) {
   const { analysisRunId, data, contextSnapshot } = params;
 
-  // 顺序执行而非事务，避免 P2028 事务超时
-  await Promise.all([
-    prisma.analysisRisk.deleteMany({ where: { analysisRunId } }),
-    prisma.analysisReviewComment.deleteMany({ where: { analysisRunId } }),
-    prisma.analysisFileChange.deleteMany({ where: { analysisRunId } }),
-    prisma.analysisContextSnapshot.deleteMany({ where: { analysisRunId } }),
-  ]);
+  const claimed = await prisma.analysisRun.updateMany({
+    where: {
+      id: analysisRunId,
+      status: AnalysisStatus.RUNNING,
+    },
+    data: {
+      status: AnalysisStatus.PENDING,
+      errorCode: null,
+      errorMessage: null,
+    },
+  });
 
-  await prisma.analysisRun.update({
+  if (claimed.count === 0) {
+    const existing = await prisma.analysisRun.findUnique({
+      where: { id: analysisRunId },
+      select: { status: true },
+    });
+
+    if (existing?.status === AnalysisStatus.SUCCEEDED) {
+      return;
+    }
+
+    throw new Error(`Analysis run ${analysisRunId} is not in a completable state`);
+  }
+
+  try {
+    await prisma.analysisRun.update({
       where: { id: analysisRunId },
       data: {
         status: AnalysisStatus.SUCCEEDED,
+        degradedFromReview: data.degradedFromReview ?? false,
+        degradedReason: data.degradedReason,
         summary: data.summary,
         riskLevel: toPrismaRiskLevel(data.riskLevel),
         modelUsed: data.modelUsed,
@@ -454,7 +476,22 @@ export async function completeAnalysisRun(params: {
           },
         },
       },
-    })
+    });
+  } catch (error) {
+    await prisma.analysisRun.updateMany({
+      where: {
+        id: analysisRunId,
+        status: AnalysisStatus.PENDING,
+      },
+      data: {
+        status: AnalysisStatus.FAILED,
+        errorCode: 'PERSIST_ERROR',
+        errorMessage: error instanceof Error ? error.message : 'Failed to persist analysis result',
+        completedAt: new Date(),
+      },
+    });
+    throw error;
+  }
 }
 
 export async function failAnalysisRun(params: {
@@ -464,8 +501,13 @@ export async function failAnalysisRun(params: {
 }) {
   const { analysisRunId, errorCode, errorMessage } = params;
 
-  await prisma.analysisRun.update({
-    where: { id: analysisRunId },
+  await prisma.analysisRun.updateMany({
+    where: {
+      id: analysisRunId,
+      status: {
+        in: [AnalysisStatus.RUNNING, AnalysisStatus.PENDING],
+      },
+    },
     data: {
       status: AnalysisStatus.FAILED,
       errorCode,
