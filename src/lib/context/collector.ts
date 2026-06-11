@@ -100,10 +100,17 @@ export async function collectContext(
     dependencyGraph = buildDependencyGraph(fileChanges, contentMap);
   }
 
-  // ═══ Phase 5: AI-driven related file retrieval (RAG) ★ NEW ═══
+  // ═══ Phase 5: AI-driven related file retrieval (RAG) ═══
+  // Now fed with explicit dependencies from Phase 4's static analysis,
+  // so the LLM can focus on discovering *implicit* logical relationships
+  // that static import analysis misses (DI, middleware chains, conventions).
   let relatedFiles: RelatedFile[] = [];
   if (opts.includeRelatedFiles && repoStructure.length > 0 && prInfo.headSha) {
     console.log(`[RAG] Finding related files in ${repoStructure.length} repo files...`);
+    const externalDeps = dependencyGraph?.externalDependents ?? [];
+    if (externalDeps.length > 0) {
+      console.log(`[RAG] Feeding ${externalDeps.length} explicit dependencies from static analysis`);
+    }
     try {
       relatedFiles = await findRelatedFiles(
         prInfo,
@@ -116,9 +123,10 @@ export async function collectContext(
           owner,
           repo,
           headSha: prInfo.headSha,
+          explicitDepPaths: externalDeps,
         },
       );
-      console.log(`[RAG] Found ${relatedFiles.length} related files.`);
+      console.log(`[RAG] Found ${relatedFiles.length} related files (explicit + semantic).`);
     } catch (error) {
       console.warn('[RAG] Related file retrieval failed, continuing without:', error);
       relatedFiles = []; // Graceful degradation

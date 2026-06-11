@@ -5,6 +5,10 @@
  * and identify files semantically related to the PR changes — files that
  * a human reviewer would want to look at when evaluating the impact.
  *
+ * Two complementary inputs feed the retrieval:
+ * 1. Static dependency graph → explicit import/require relationships (100% accurate)
+ * 2. LLM semantic reasoning → implicit logical dependencies (covers DI, patterns, conventions)
+ *
  * This mimics what a senior reviewer does: "This change to the token
  * validation function... which middleware calls it? Are the tests updated?"
  */
@@ -27,6 +31,12 @@ export interface RelatedFilesConfig {
   repo: string;
   /** Git ref for file fetching */
   headSha: string;
+  /**
+   * Known explicit dependency paths from static analysis (e.g. import/require).
+   * These are used as high-priority hints for the LLM and also matched against
+   * the repo structure to directly include verified matches.
+   */
+  explicitDepPaths?: string[];
 }
 
 const DEFAULT_CONFIG: Partial<RelatedFilesConfig> = {
@@ -37,6 +47,12 @@ const DEFAULT_CONFIG: Partial<RelatedFilesConfig> = {
 /**
  * Main entry point: find related files using AI, then fetch their content.
  *
+ * Pipeline:
+ * 1. Resolve explicit dependency hints against repo structure (direct includes)
+ * 2. Build retrieval prompt with dependency hints baked in
+ * 3. Call lightweight AI for semantic file selection
+ * 4. Merge explicit matches + AI results, deduplicate, fetch content
+ *
  * @returns RelatedFile[] with content populated
  */
 export async function findRelatedFiles(
@@ -46,25 +62,53 @@ export async function findRelatedFiles(
   repoStructure: string[],
   config: RelatedFilesConfig,
 ): Promise<RelatedFile[]> {
-  // Step 1: Build the retrieval prompt
-  const prompt = buildRetrievalPrompt(prInfo, changedFiles, commits, repoStructure);
+  const changedPaths = new Set(changedFiles.map((f) => f.file));
 
-  // Step 2: Call lightweight AI for file selection
+  // Step 1: Resolve explicit dependency hints against repo structure.
+  // These are files that the static dependency graph already confirmed are
+  // related — no AI guessing needed. We include them directly.
+  const resolvedExplicit = resolveExplicitDeps(
+    config.explicitDepPaths ?? [],
+    repoStructure,
+    changedPaths,
+  );
+
+  // Step 2: Build the retrieval prompt with explicit deps as priority hints
+  const prompt = buildRetrievalPrompt(
+    prInfo,
+    changedFiles,
+    commits,
+    repoStructure,
+    config.explicitDepPaths ?? [],
+    resolvedExplicit.map((r) => r.path),
+  );
+
+  // Step 3: Call lightweight AI for semantic file selection
   const rawResult = await callRetrievalModel(prompt);
 
-  if (!rawResult || rawResult.relatedFiles.length === 0) {
+  // Step 4: Merge explicit matches + AI semantic results
+  let combinedResults: { path: string; reason: string; relevance: 'high' | 'medium' | 'low' }[] = [
+    ...resolvedExplicit,
+  ];
+
+  if (rawResult && rawResult.relatedFiles.length > 0) {
+    const explicitPaths = new Set(resolvedExplicit.map((r) => r.path));
+    const aiResults = rawResult.relatedFiles
+      .filter((f) => !changedPaths.has(f.path) && !explicitPaths.has(f.path))
+      .slice(0, config.maxFiles);
+    combinedResults = [...combinedResults, ...aiResults];
+  }
+
+  // Cap at maxFiles
+  combinedResults = combinedResults.slice(0, config.maxFiles);
+
+  if (combinedResults.length === 0) {
     return [];
   }
 
-  // Step 3: Deduplicate against changed files
-  const changedPaths = new Set(changedFiles.map((f) => f.file));
-  const uniqueResults = rawResult.relatedFiles
-    .filter((f) => !changedPaths.has(f.path))
-    .slice(0, config.maxFiles);
-
-  // Step 4: Fetch content for related files (if configured)
+  // Step 5: Fetch content for related files (if configured)
   if (!config.fetchContent) {
-    return uniqueResults.map((r) => ({
+    return combinedResults.map((r) => ({
       path: r.path,
       reason: r.reason,
       relevance: r.relevance,
@@ -74,7 +118,7 @@ export async function findRelatedFiles(
   }
 
   const withContent = await fetchRelatedFileContents(
-    uniqueResults,
+    combinedResults,
     config.owner,
     config.repo,
     config.headSha,
@@ -84,6 +128,57 @@ export async function findRelatedFiles(
   return withContent;
 }
 
+// ─── Explicit Dependency Resolution ────────────────────────────────────
+
+/**
+ * Match static-analysis dependency paths (e.g. "../utils/helper", "./types/user")
+ * against the actual repo file tree to find concrete file paths.
+ *
+ * Strategy: use the last path segment as a fuzzy key — if a repo file ends
+ * with the same name segment, it's very likely the same file.
+ */
+function resolveExplicitDeps(
+  depPaths: string[],
+  repoStructure: string[],
+  changedPaths: Set<string>,
+): { path: string; reason: string; relevance: 'high' }[] {
+  const results: { path: string; reason: string; relevance: 'high' }[] = [];
+  const seen = new Set<string>();
+
+  for (const dep of depPaths) {
+    // Extract the meaningful part: last segment of the import path
+    const segments = dep.replace(/\\/g, '/').split('/').filter(Boolean);
+    const keySegment = segments[segments.length - 1];
+
+    if (!keySegment || keySegment === '.' || keySegment === '..') continue;
+
+    // Try exact suffix match against repo files
+    for (const repoPath of repoStructure) {
+      if (changedPaths.has(repoPath) || seen.has(repoPath)) continue;
+
+      const repoFileName = repoPath.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+      const repoDir = repoPath.split('/').slice(0, -1).join('/');
+
+      // Match: file name matches AND directory path overlaps
+      const dirMatch = segments.length >= 2
+        ? repoDir.endsWith(segments.slice(0, -1).join('/')) || repoDir.includes(segments.slice(0, -1).join('/'))
+        : true;
+
+      if (repoFileName === keySegment && dirMatch) {
+        results.push({
+          path: repoPath,
+          reason: '显式依赖（静态分析）',
+          relevance: 'high',
+        });
+        seen.add(repoPath);
+        break; // One match per dep path
+      }
+    }
+  }
+
+  return results;
+}
+
 // ─── Prompt Building ──────────────────────────────────────────────────
 
 function buildRetrievalPrompt(
@@ -91,6 +186,8 @@ function buildRetrievalPrompt(
   changedFiles: FileChange[],
   commits: CommitInfo[],
   repoStructure: string[],
+  explicitDepPaths: string[],
+  resolvedExplicitPaths: string[],
 ): string {
   const changedFileList = changedFiles
     .map((f) => `- ${f.file} (${f.status}: +${f.additions}/-${f.deletions})`)
@@ -113,6 +210,21 @@ function buildRetrievalPrompt(
 
   const treeStr = truncatedTree.join('\n');
 
+  // Build explicit dependency hints section
+  let explicitHintsSection = '';
+  if (explicitDepPaths.length > 0 && resolvedExplicitPaths.length > 0) {
+    explicitHintsSection = `
+## 已知显式依赖（静态分析 — 100% 准确，已自动纳入）
+
+以下文件通过 import/require 被变更文件直接依赖，已自动标记为高优先级相关文件：
+
+${resolvedExplicitPaths.map((p) => `- ${p}`).join('\n')}
+
+> 导入路径: ${explicitDepPaths.slice(0, 10).join(', ')}${explicitDepPaths.length > 10 ? ` ... 等共 ${explicitDepPaths.length} 条` : ''}
+> 请以上述文件为种子，从仓库文件树中**补充发现以下类型的隐式关联文件**（不要重复上述已自动纳入的文件）：
+`;
+  }
+
   return `你是一个代码架构专家。以下是一个 PR 的信息，请找出仓库中与本次变更最相关的文件。
 
 ## PR 信息
@@ -125,18 +237,18 @@ ${changedFileList}
 
 ## Commit 消息
 ${commitSummary || '（无 commit 信息）'}
-
+${explicitHintsSection}
 ## 仓库文件树（共 ${repoStructure.length} 个文件）
 \`\`\`
 ${treeStr}
 \`\`\`
 
 ## 任务
-从仓库文件树中，找出与本次 PR 最相关的文件（**不包括上面已列出的变更文件**）。
+从仓库文件树中，找出与本次 PR 最相关的文件（**不包括上面已列出的变更文件和已自动纳入的显式依赖文件**）。
 
 相关性判断标准（按优先级排序）：
-1. **调用方（最重要）**：可能调用了变更文件中导出函数/类/接口的文件。根据文件路径和命名推断调用关系。
-2. **被依赖方**：变更文件依赖的核心模块、基类、接口定义、工具函数
+1. **隐式调用方**：虽然没有直接 import，但通过 DI 注入、反射、中间件链、事件系统等间接调用了变更文件中的逻辑
+2. **被依赖方**：变更文件依赖的核心模块、基类、接口定义、工具函数（如果静态分析漏掉了某些）
 3. **测试文件**：与变更文件对应的测试文件（命名惯例：src/foo/bar.ts → tests/foo/bar.test.ts 或 src/foo/__tests__/bar.test.ts）
 4. **同模块文件**：与变更文件在同一目录或相邻目录、功能紧密相关的文件
 5. **配置文件**：与变更相关的配置（如 package.json, tsconfig.json, .eslintrc.*）
@@ -148,7 +260,7 @@ ${treeStr}
   "relatedFiles": [
     {
       "path": "src/middleware/authMiddleware.ts",
-      "reason": "调用了 login.ts 的 validateToken，变更可能影响其行为",
+      "reason": "通过中间件链间接调用 login.ts",
       "relevance": "high"
     }
   ]
@@ -158,6 +270,7 @@ ${treeStr}
 - path 必须是仓库文件树中存在的路径
 - reason 用中文简短说明（20字以内）
 - relevance: high（直接调用/被调用关系）, medium（同模块/配置）, low（可能相关）
+- **不要重复已自动纳入的显式依赖文件**
 - 只返回 JSON，不要任何其他文字`;
 }
 
