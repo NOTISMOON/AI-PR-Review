@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Circle, FolderGit2, GitPullRequest, Search, ShieldCheck, Star } from "lucide-react";
+import { Circle, FolderGit2, GitPullRequest, Search, ShieldCheck, Star, X } from "lucide-react";
 
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -11,7 +11,7 @@ import { Input } from "@/app/components/ui/input";
 import { cn } from "@/app/components/ui/utils";
 import { CountUp, Entrance, SplitTitle } from "@/app/components/motion";
 import { usePlatform } from "@/app/components/platform";
-import { authFetch } from "@/lib/client/auth-fetch";
+import { cachedFetch } from "@/lib/client/data-cache";
 
 type Platform = "github" | "gitee";
 type ReviewStatus = "reviewing" | "enabled" | "off";
@@ -87,81 +87,6 @@ const STATUS_STYLE: Record<
   },
 };
 
-const REPOS: Repo[] = [
-  {
-    name: "ai-pr-",
-    nameFocus: "review",
-    owner: "nicepkg",
-    platform: "github",
-    desc: "AI 代码审查平台核心仓库，Webhook 自动审查与多模型路由。",
-    lang: "typescript",
-    star: 128,
-    pending: 2,
-    status: "reviewing",
-    updated: "2 小时前",
-  },
-  {
-    name: "nextjs-",
-    nameFocus: "blog",
-    owner: "nicepkg",
-    platform: "github",
-    desc: "Next.js 14 + MDX 博客主题，SSR 与静态渲染示例。",
-    lang: "typescript",
-    star: 56,
-    pending: 0,
-    status: "enabled",
-    updated: "昨天",
-  },
-  {
-    name: "ml-",
-    nameFocus: "toolkit",
-    owner: "nicepkg",
-    platform: "gitee",
-    desc: "数据预处理与模型评估的机器学习工具集。",
-    lang: "python",
-    star: 42,
-    pending: 2,
-    status: "off",
-    updated: "3 天前",
-  },
-  {
-    name: "rust-",
-    nameFocus: "parser",
-    owner: "nicepkg",
-    platform: "github",
-    desc: "用 rust 编写的轻量异步 diff 解析库。",
-    lang: "rust",
-    star: 89,
-    pending: 1,
-    status: "enabled",
-    updated: "4 天前",
-  },
-  {
-    name: "go-",
-    nameFocus: "gateway",
-    owner: "nicepkg",
-    platform: "gitee",
-    desc: "基于 Go 的 API 网关，内置限流与鉴权中间件。",
-    lang: "go",
-    star: 67,
-    pending: 0,
-    status: "reviewing",
-    updated: "6 天前",
-  },
-  {
-    name: "ui-design-",
-    nameFocus: "system",
-    owner: "nicepkg",
-    platform: "github",
-    desc: "跨框架组件库与设计令牌，供 Forge 平台使用。",
-    lang: "javascript",
-    star: 31,
-    pending: 0,
-    status: "off",
-    updated: "1 周前",
-  },
-];
-
 const KPIS_ICON = {
   total: <FolderGit2 className="size-5" />,
   enabled: <ShieldCheck className="size-5" />,
@@ -232,13 +157,42 @@ function RepoCard({ repo }: { repo: Repo }) {
 }
 
 export default function ReposPage() {
-  const { provider, meta } = usePlatform();
+  const { provider, meta, ready } = usePlatform();
   const [live, setLive] = useState<Repo[]>([]);
   const [liveLoading, setLiveLoading] = useState(provider === "github" || provider === "gitee");
   const [liveError, setLiveError] = useState<string | null>(null);
+  /** 分页：每页固定展示 6 个，切换页时仅统计当前 6 个的待审数 */
+  const PAGE_SIZE = 6;
+  const [page, setPage] = useState(1);
+  /** 各仓库 open PR 数（full_name → count），按访问过的页累积，便于切回直接命中 */
+  const [pendingMap, setPendingMap] = useState<Record<string, number>>({});
+  /** 后端分页返回的全量聚合（真分页：总仓库数 / 已开启审查数 / 审查中数） */
+  const [total, setTotal] = useState(0);
+  const [enabledCount, setEnabledCount] = useState(0);
+  const [reviewingCount, setReviewingCount] = useState(0);
+  /** 模糊搜索：输入 → 防抖到 debouncedQ，随分页一并请求后端过滤 */
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
 
-  // GitHub / Gitee：按当前登录身份拉取真实仓库；其它情况用 mock 兜底
+  // 从 URL ?q= 初始化（支持侧边栏全局搜索跳转带关键词）
   useEffect(() => {
+    const urlQ = new URLSearchParams(window.location.search).get("q") || "";
+    setQ(urlQ);
+    setDebouncedQ(urlQ);
+  }, []);
+
+  // 输入防抖 + 切回第 1 页
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQ(q.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // GitHub / Gitee：按当前登录身份 + 页码分页拉取真实仓库（后端每个 status 已算好）
+  useEffect(() => {
+    if (!ready) return; // 身份未校正前不发平台请求，避免首帧误打错误平台接口产生 401
     if (provider !== "github" && provider !== "gitee") {
       setLiveLoading(false);
       return;
@@ -246,44 +200,35 @@ export default function ReposPage() {
     let cancelled = false;
     setLiveLoading(true);
     setLiveError(null);
-    authFetch(`/api/${provider}/repos`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as { repos?: any[]; login?: string };
-      })
-      .then(async (data) => {
+    const sp = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    if (debouncedQ) sp.set("q", debouncedQ);
+    cachedFetch<{
+      repos?: any[];
+      total?: number;
+      enabledCount?: number;
+      reviewingCount?: number;
+      login?: string;
+    }>(`/api/${provider}/repos?${sp.toString()}`, 30)
+      .then((data) => {
         if (cancelled) return;
-        const raw = (data.repos ?? []) as any[];
-        const mapped: Repo[] = raw.map((r: any): Repo => ({
+        const totalN = typeof data.total === "number" ? data.total : (data.repos ?? []).length;
+        setTotal(totalN);
+        setEnabledCount(typeof data.enabledCount === "number" ? data.enabledCount : 0);
+        setReviewingCount(typeof data.reviewingCount === "number" ? data.reviewingCount : 0);
+        // 后端已给每条 status；此处仅拼接前端展示所需字段
+        const mapped: Repo[] = (data.repos ?? []).map((r: any): Repo => ({
           name: r.full_name?.split("/")?.[1] ?? r.name,
           nameFocus: "",
-          owner: data.login ?? "",
+          owner: r.full_name?.split("/")?.[0] ?? data.login ?? "",
           platform: provider,
           desc: r.description || "(无描述)",
           lang: toLang(r.language),
           star: r.stargazers_count ?? 0,
           pending: 0,
-          status: "off",
+          status: r.status === "reviewing" || r.status === "enabled" ? r.status : "off",
           updated: "",
         }));
-
-        // 并行拉前 6 个仓库的 open PR 数（替换固定 0）
-        const counts = await Promise.all(
-          raw.slice(0, 6).map(async (r: any): Promise<number> => {
-            if (!r?.full_name) return 0;
-            const [o, n] = String(r.full_name).split("/");
-            try {
-              const res = await authFetch(`/api/${provider}/pulls?owner=${encodeURIComponent(o)}&repo=${encodeURIComponent(n)}`);
-              if (!res.ok) return 0;
-              const j = (await res.json()) as { pulls?: unknown[] };
-              return (j.pulls ?? []).length;
-            } catch {
-              return 0;
-            }
-          }),
-        );
-        if (cancelled) return;
-        setLive(mapped.map((m, i) => ({ ...m, pending: counts[i] ?? 0 })));
+        setLive(mapped);
       })
       .catch((e) => {
         if (!cancelled) setLiveError((e as Error).message);
@@ -294,22 +239,58 @@ export default function ReposPage() {
     return () => {
       cancelled = true;
     };
+  }, [provider, ready, page, debouncedQ]);
+
+  // 切换平台时回到第 1 页，避免停留在旧平台的页码
+  useEffect(() => {
+    setPage(1);
   }, [provider]);
 
-  const mockList = REPOS.filter((r) => r.platform === provider);
   const isLive = provider === "github" || provider === "gitee";
-  const list = isLive && live.length > 0 ? live : mockList;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageKey = (r: Repo) => `${r.owner}/${r.name}`;
   const kpis = [
-    { label: "总仓库", value: list.length, icon: KPIS_ICON.total },
-    { label: "已开启审查", value: list.filter((r) => r.status !== "off").length, icon: KPIS_ICON.enabled },
-    { label: "待审 PR", value: list.reduce((s, r) => s + r.pending, 0), icon: KPIS_ICON.pending },
-    { label: "审查中", value: list.filter((r) => r.status === "reviewing").length, icon: KPIS_ICON.auto },
+    { label: "总仓库", value: total, icon: KPIS_ICON.total },
+    { label: "已开启审查", value: enabledCount, icon: KPIS_ICON.enabled },
+    { label: "待审 PR", value: live.reduce((s, r) => s + (pendingMap[pageKey(r)] ?? 0), 0), icon: KPIS_ICON.pending },
+    { label: "审查中", value: reviewingCount, icon: KPIS_ICON.auto },
   ];
+
+  // 分页待审：仅拉取「当前页」仓库的 open PR 数，写入 pendingMap（切回已访问页直接命中）
+  useEffect(() => {
+    if (!ready || !live.length) return;
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, number> = {};
+      for (const repo of live) {
+        const owner = repo.owner;
+        const name = repo.name;
+        const key = `${owner}/${name}`;
+        if (!owner || !name) {
+          next[key] = 0;
+          continue;
+        }
+        try {
+          const j = await cachedFetch<{ pulls?: unknown[] }>(
+            `/api/${provider}/pulls?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(name)}`,
+            60,
+          );
+          next[key] = (j.pulls ?? []).length;
+        } catch {
+          next[key] = 0;
+        }
+      }
+      if (!cancelled) setPendingMap((prev) => ({ ...prev, ...next }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, provider, ready, page]);
 
   const syncedStatus = (
     <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-[13px] text-face-2">
       <span className={`size-1.5 rounded-full ${liveLoading ? "bg-amber animate-pulse" : "bg-green"}`} />
-      {liveLoading ? "同步中…" : `${isLive ? "实时" : "演示"} · ${list.length} 个仓库`}
+      {liveLoading ? "同步中…" : "实时"} · {total} 个仓库
     </span>
   );
 
@@ -359,17 +340,29 @@ export default function ReposPage() {
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-face-3" />
           <Input
             type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
             placeholder={`搜索${meta.name}仓库…`}
             aria-label="搜索仓库"
-            className="h-9.5 border-line bg-ink-850 pl-9"
+            className="h-9.5 border-line bg-ink-850 pr-9 pl-9"
           />
+          {q && (
+            <button
+              type="button"
+              aria-label="清空搜索"
+              onClick={() => setQ("")}
+              className="absolute top-1/2 right-2.5 grid size-5 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-face-3 transition-colors hover:bg-ink-800 hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 实时加载失败提示（回退演示数据时） */}
+      {/* 实时加载失败提示 */}
       {isLive && liveError && (
         <div className="rounded-md border border-amber/30 bg-amber/10 px-3.5 py-2 text-[12.5px] text-amber">
-          实时数据加载失败（{liveError}），当前暂显示演示数据。
+          实时数据加载失败（{liveError}），请确认授权后重试。
         </div>
       )}
 
@@ -384,20 +377,37 @@ export default function ReposPage() {
             </div>
           ))
         ) : (
-          list.map((repo) => <RepoCard key={repo.name + repo.nameFocus} repo={repo} />)
+          live.map((repo) => (
+            <RepoCard
+              key={`${repo.owner}/${repo.name}${repo.nameFocus}`}
+              repo={{ ...repo, pending: pendingMap[pageKey(repo)] ?? 0 }}
+            />
+          ))
         )}
       </section>
 
-      {/* 分页 */}
+      {/* 分页：每页 6 个，仅请求/统计当前页 */}
       <div className="flex items-center justify-between gap-3 text-[12.5px] text-face-3">
         <span>
-          共 {list.length} 个仓库 · 当前显示 {list.length}
+          第 {page} / {totalPages} 页 · 共 {total} 个仓库
         </span>
         <div className="flex items-center gap-1.5">
-          <Button variant="ghost" size="sm" disabled className="opacity-60">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className={page <= 1 ? "opacity-60" : ""}
+          >
             上一页
           </Button>
-          <Button variant="secondary" size="sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            className={page >= totalPages ? "opacity-60" : ""}
+          >
             下一页
           </Button>
         </div>

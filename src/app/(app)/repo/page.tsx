@@ -16,7 +16,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Entrance, SplitTitle } from "@/app/components/motion";
 import { usePlatform } from "@/app/components/platform";
-import { authFetch } from "@/lib/client/auth-fetch";
+import { cachedFetch } from "@/lib/client/data-cache";
 
 import { Badge } from "@/app/components/ui/badge";
 import { cn } from "@/app/components/ui/utils";
@@ -171,6 +171,15 @@ interface OpenFile {
   tooLarge?: boolean;
 }
 
+/** `browse?owner&repo` 根目录浏览返回结构（分支列表 / 默认分支 / 文件树 / 最新提交） */
+interface BrowseRoot {
+  branches?: { name: string }[];
+  defaultBranch?: string;
+  ref?: string;
+  entries?: TreeNode[];
+  latestCommit?: BrowseCommit | null;
+}
+
 const MAX_LINES = 2000;
 
 /** 递归地把某个目录节点的 children 填充进文件树 */
@@ -196,7 +205,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function RepoPage() {
-  const { provider } = usePlatform();
+  const { provider, ready } = usePlatform();
   const [repos, setRepos] = useState<{ full_name: string; name: string }[]>([]);
   const [sel, setSel] = useState<{ owner: string; repo: string }>({ owner: "", repo: "" });
 
@@ -226,9 +235,8 @@ export default function RepoPage() {
       try {
         const q = new URLSearchParams({ owner, repo });
         if (branch) q.set("ref", branch);
-        const res = await authFetch(`/api/${provider}/browse?${q.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
+        // 根目录浏览较频繁：走缓存（30s 内同 owner/repo/ref 复用同一内容），减少重复整树请求
+        const d = await cachedFetch<BrowseRoot>(`/api/${provider}/browse?${q.toString()}`, 30);
         setBranches(d.branches ?? []);
         setDefaultBranch(d.defaultBranch || "main");
         setRef(d.ref || branch || d.defaultBranch || "main");
@@ -245,12 +253,12 @@ export default function RepoPage() {
 
   // 1) 加载仓库列表，确定默认选中的仓库（支持 ?owner/repo 定位）
   useEffect(() => {
+    if (!ready) return; // 身份未校正前不发平台请求，避免首帧误打错误平台接口产生 401
     let cancelled = false;
     const q = new URLSearchParams(window.location.search);
     const qo = q.get("owner");
     const qr = q.get("repo");
-    authFetch(`/api/${provider}/repos`)
-      .then((r) => (r.ok ? r.json() : null))
+    cachedFetch<{ repos?: any[] }>(`/api/${provider}/repos`, 30)
       .then((d) => {
         if (cancelled || !d) return;
         const list: { full_name: string; name: string }[] = (d.repos ?? []).map((x: any) => ({
@@ -268,7 +276,7 @@ export default function RepoPage() {
     return () => {
       cancelled = true;
     };
-  }, [provider]);
+  }, [provider, ready]);
 
   // 2) 选中仓库变化时加载根目录（初始 URL 带 ref 时沿用）
   useEffect(() => {
@@ -307,9 +315,8 @@ export default function RepoPage() {
     if (node.loaded || node.children) return;
     try {
       const q = new URLSearchParams({ owner: sel.owner, repo: sel.repo, ref, path: node.path });
-      const res = await authFetch(`/api/${provider}/browse?${q.toString()}`);
-      if (!res.ok) throw new Error("加载失败");
-      const d = await res.json();
+      // 目录浏览走缓存：30s 内同 path 复用同一内容，反复展开/来回导航不再重复请求
+      const d = await cachedFetch<{ entries?: BrowseEntry[] }>(`/api/${provider}/browse?${q.toString()}`, 30);
       setTree((t) => patchTree(t, node.path, d.entries ?? []));
     } catch {
       /* 拉取失败允许折叠重试 */
@@ -322,9 +329,11 @@ export default function RepoPage() {
     setLoadingFile(true);
     try {
       const q = new URLSearchParams({ owner: sel.owner, repo: sel.repo, ref, path: node.path });
-      const res = await authFetch(`/api/${provider}/browse?${q.toString()}`);
-      if (!res.ok) throw new Error("加载失败");
-      const d = await res.json();
+      // 文件内容走缓存：30s 内同 path 复用同一内容，避免重复下载大文件
+      const d = await cachedFetch<{ kind?: string; content?: string; size?: number; tooLarge?: boolean }>(
+        `/api/${provider}/browse?${q.toString()}`,
+        30,
+      );
       if (d.kind === "file") {
         setFile({ path: node.path, content: d.content || "", size: d.size || 0, tooLarge: !!d.tooLarge });
       }

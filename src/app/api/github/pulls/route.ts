@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSession } from "@/lib/github/session";
 import { listRepoPulls } from "@/lib/github/user-client";
+import { cachedRead } from "@/lib/cache/redis";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,12 @@ export async function GET(req: NextRequest) {
   if (!owner || !repo) return NextResponse.json({ error: "owner,repo required" }, { status: 400 });
 
   try {
-    const pulls = await listRepoPulls(r.token, owner, repo);
+    // PR 列表加短缓存（60s），key 含用户+仓库维度；Redis 不可用时自动降级回源
+    const pulls = await cachedRead(
+      `github:pulls:${r.ctx.dbUser.id}:${owner}:${repo}`,
+      60,
+      async () => listRepoPulls(r.token, owner, repo),
+    );
     return NextResponse.json({ pulls });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
