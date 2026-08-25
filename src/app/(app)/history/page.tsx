@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Layers, Loader2, Search, ShieldCheck, Timer, TrendingUp } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Layers, Loader2, ShieldCheck, Timer, Trash2, TrendingUp } from "lucide-react";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -79,14 +80,15 @@ function CountCell({ value, label, tone }: { value: number; label: string; tone:
 
 export default function HistoryPage() {
   const { provider } = usePlatform();
+  const router = useRouter();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [filter, setFilter] = useState("all");
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -98,7 +100,6 @@ export default function HistoryPage() {
         pageSize: String(pageSize),
         filter,
       });
-      if (q) sp.set("q", q);
       const res = await authFetch(`/api/review/history?${sp.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
@@ -110,24 +111,33 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [provider, page, pageSize, filter, q]);
+  }, [provider, page, pageSize, filter]);
 
-  // 搜索防抖
+  // filter/page 变化即重新加载
   useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(1);
-      load();
-    }, 400);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  // filter/page 变化直接加载（q 由防抖触发）
-  useEffect(() => {
-    if (q) return; // q 变化走防抖分支
     load();
-  }, [filter, page, provider, q, load]);
+  }, [filter, page, provider, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  /** 删除单条历史：确认后调 DELETE，成功刷新当前列表 */
+  async function remove(id: number) {
+    if (!window.confirm("确认删除这条审查历史？")) return;
+    setDeleting(id);
+    try {
+      const res = await authFetch(`/api/review/history/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await load();
+      } else {
+        const d = await res.json().catch(() => null);
+        setError(d?.error || "删除失败");
+      }
+    } catch {
+      setError("删除失败，请稍后重试");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   return (
     <Entrance className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
@@ -185,7 +195,7 @@ export default function HistoryPage() {
         </Card>
       </div>
 
-      {/* ===== 筛选 + 搜索 ===== */}
+      {/* ===== 筛选 ===== */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-ink-900 p-1">
           {SEGS.map((s) => (
@@ -205,17 +215,6 @@ export default function HistoryPage() {
               {s.label}
             </button>
           ))}
-        </div>
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-face-3" />
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索 PR / 仓库…"
-            aria-label="搜索审查记录"
-            className="h-10 w-full rounded-md border border-line bg-ink-850 pl-10 pr-3 text-[13px] text-foreground placeholder:text-face-3 focus:border-amber focus:ring-[3px] focus:ring-amber/25 focus:outline-none"
-          />
         </div>
       </div>
 
@@ -238,19 +237,20 @@ export default function HistoryPage() {
                 <th className="px-3 py-3">状态</th>
                 <th className="px-3 py-3">耗时</th>
                 <th className="px-5 py-3 text-right">时间</th>
+                <th className="px-3 py-3 text-center">操作</th>
               </tr>
             </thead>
             <tbody>
               {loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[12.5px] text-face-3">
+                  <td colSpan={8} className="px-4 py-12 text-center text-[12.5px] text-face-3">
                     <Loader2 className="mx-auto mb-2 size-5 animate-spin text-amber" />
                     加载中…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[12.5px] text-face-3">
+                  <td colSpan={8} className="px-4 py-12 text-center text-[12.5px] text-face-3">
                     暂无审查记录 · Webhook 触发自动审查后会出现在这里
                   </td>
                 </tr>
@@ -258,7 +258,12 @@ export default function HistoryPage() {
                 items.map((r) => {
                   const dec = DECISION[r.decision] ?? DECISION.PENDING;
                   return (
-                    <tr key={r.id} className="border-b border-line/60 transition-colors last:border-0 hover:bg-ink-850/40">
+                    <tr
+                      key={r.id}
+                      title="点击查看详情"
+                      onClick={() => router.push(`/review?id=${r.id}`)}
+                      className="cursor-pointer border-b border-line/60 transition-colors last:border-0 hover:bg-ink-850/40"
+                    >
                       <td className="px-5 py-3.5">
                         <div className="font-semibold text-foreground hover:text-amber">
                           {r.prTitle || "—"}
@@ -287,6 +292,20 @@ export default function HistoryPage() {
                       </td>
                       <td className="px-5 py-3.5 text-right text-[12px] text-face-3 whitespace-nowrap">
                         {timeAgo(r.completedAt)}
+                      </td>
+                      <td className="px-3 py-3.5 text-center">
+                        <button
+                          type="button"
+                          title="删除这条历史"
+                          disabled={deleting === r.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            remove(r.id);
+                          }}
+                          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-face-3 transition-colors hover:bg-[var(--red-soft)] hover:text-red disabled:opacity-50"
+                        >
+                          <Trash2 className={cn("size-3.5", deleting === r.id && "animate-pulse")} />
+                        </button>
                       </td>
                     </tr>
                   );

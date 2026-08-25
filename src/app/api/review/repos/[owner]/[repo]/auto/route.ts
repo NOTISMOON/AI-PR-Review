@@ -8,7 +8,16 @@ import {
   upsertWebhookConfig,
 } from "@/lib/db/mysql";
 import { getRequestOrigin } from "@/lib/request";
-import { ensureRepoHook, generateWebhookSecret, resolveWebhookSession } from "@/lib/platform/webhook";
+import { cacheDel } from "@/lib/cache/redis";
+import {
+  ensureRepoHook,
+  generateWebhookSecret,
+  removeRepoHook,
+  resolveWebhookSession,
+} from "@/lib/platform/webhook";
+
+/** 仓库开关在全局设置页展示，变更后失效其缓存 */
+const settingsCacheKey = (provider: string, userId: number) => `settings:${provider}:${userId}`;
 
 export const runtime = "nodejs";
 
@@ -22,9 +31,6 @@ export async function POST(
 ) {
   const r = await resolveWebhookSession(req);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 401 });
-  if (r.provider !== "github") {
-    return NextResponse.json({ error: "自动审查目前仅支持 GitHub" }, { status: 400 });
-  }
   if (!r.token) return NextResponse.json({ error: "no_token" }, { status: 401 });
 
   const { owner, repo } = await params;
@@ -48,8 +54,9 @@ export async function POST(
     else delete repoAuto[fullName];
     await setSetting(r.ctx.dbUser.id, "repo_auto_review", JSON.stringify(repoAuto));
 
-    // 2) 开启时自动配置 Webhook（无 Secret 则先生成）
+    // 2) 开启时自动配置 Webhook；关闭时销毁平台侧指向本服务的 Webhook
     let webhookConfigured = false;
+    let webhookDestroyed = false;
     if (enabled) {
       let cfg = await getWebhookConfig(r.ctx.dbUser.id, r.provider);
       const secret = cfg?.secret ?? generateWebhookSecret();
@@ -71,9 +78,23 @@ export async function POST(
         await ensureRepoHook(r.provider, r.token, { owner, repo, url, secret: cfg.secret, events });
         webhookConfigured = true;
       }
+    } else {
+      const cfg = await getWebhookConfig(r.ctx.dbUser.id, r.provider);
+      if (cfg?.secret) {
+        const origin = getRequestOrigin(req);
+        const url = `${origin}/api/webhook/${r.provider}`;
+        webhookDestroyed = await removeRepoHook(r.provider, r.token, { owner, repo, url });
+      }
     }
 
-    return NextResponse.json({ ok: true, enabled, webhookConfigured });
+    // 仓库开关变化影响全局设置页展示，失效其缓存
+    try {
+      await cacheDel(settingsCacheKey(r.provider, r.ctx.dbUser.id));
+    } catch {
+      /* ignore */
+    }
+
+    return NextResponse.json({ ok: true, enabled, webhookConfigured, webhookDestroyed });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

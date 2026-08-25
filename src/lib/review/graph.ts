@@ -1,10 +1,12 @@
 import { Annotation, StateGraph, START, END } from "@langchain/langgraph";
-import { setGitHubToken, clearGitHubToken } from "@/lib/github";
+import { setGitHubToken, clearGitHubToken, fetchFileContent } from "@/lib/github";
+import * as gitee from "@/lib/gitee/client";
 import {
   collectQuickContext,
   collectStandardContext,
   collectDeepContext,
 } from "@/lib/context";
+import { collectGiteeContext } from "@/lib/gitee/review-context";
 import { buildRoutingContext, routeModel } from "@/lib/models/router";
 import { getProviderForModel } from "@/lib/models/provider-factory";
 import type { ModelConfig, ModelAnalysisResult } from "@/lib/models/types";
@@ -20,6 +22,7 @@ import {
   replaceReviewIssues,
   upsertReviewJob,
 } from "@/lib/db/mysql";
+import { redisPublish, NOTIFY_CHANNEL, cacheDel, cacheDelPattern } from "@/lib/cache/redis";
 import {
   DIMENSIONS,
   DIMENSION_META,
@@ -31,6 +34,8 @@ import {
 import type {
   AnalysisResponse,
   CollectedContext,
+  DependencyEdge,
+  DependencyGraph,
   FileChange,
   ReviewComment,
   Risk,
@@ -78,6 +83,19 @@ const ReviewState = Annotation.Root({
   platform: Annotation<"github" | "gitee">,
   /** 用户偏好的模型（来自全局设置，空则自动选择） */
   preferredModel: Annotation<string | null>,
+  /** 风险阈值：宽松 | 默认 | 严格（影响严重级别判定） */
+  riskThreshold: Annotation<string>,
+  /** 采样温度（全局设置，默认 0.1） */
+  temperature: Annotation<number>,
+  /** 单次最大评论数（全局设置，默认 10） */
+  maxComments: Annotation<number>,
+  /** 仅审查变更行（diff_only） */
+  diffOnly: Annotation<boolean>,
+  /** 设置提交状态检查（set_status，仅 GitHub） */
+  writeStatus: Annotation<boolean>,
+
+  // buildGraph 产出（AI 依赖图，按深度决定是否跳过）
+  dependencyGraph: Annotation<DependencyGraph | null>,
 
   // prepare 产出
   collected: Annotation<CollectedContext | null>,
@@ -110,7 +128,18 @@ const ReviewState = Annotation.Root({
 
 type StateT = typeof ReviewState.State;
 
-function collectByDepth(owner: string, repo: string, prNumber: number, depth: ReviewDepth) {
+async function collectByDepth(
+  owner: string,
+  repo: string,
+  prNumber: number,
+  depth: ReviewDepth,
+  platform: "github" | "gitee",
+  token: string | null,
+) {
+  // Gitee：用 Gitee API 收集（PR 详情 + files patch.diff）
+  if (platform === "gitee") {
+    return collectGiteeContext(token!, owner, repo, prNumber);
+  }
   switch (depth) {
     case "fast":
       return collectQuickContext(owner, repo, prNumber);
@@ -126,7 +155,7 @@ async function prepare(state: StateT): Promise<Partial<StateT>> {
   const startedAt = Date.now();
   setGitHubToken(state.token ?? undefined);
   try {
-    const collected = await collectByDepth(state.owner, state.repo, state.prNumber, state.depth);
+    const collected = await collectByDepth(state.owner, state.repo, state.prNumber, state.depth, state.platform, state.token);
     const { diffTruncated } = prepareDiff(collected);
 
     const routingCtx = buildRoutingContext({
@@ -189,7 +218,7 @@ function dimensionNode(dim: ReviewDimension) {
       const result: ModelAnalysisResult = await provider.analyze({
         systemPrompt: buildDimensionSystemPrompt(dim, state.depth),
         userMessage: buildDimensionUserMessage(dim, state.collected, effectiveDiff),
-        temperature: 0.1,
+        temperature: state.temperature ?? 0.1,
         maxTokens: 2048,
       });
       const raw = parseAIResponse(result.content) as {
@@ -215,6 +244,96 @@ function dimensionNode(dim: ReviewDimension) {
   };
 }
 
+// ── 节点：AI 依赖图（按深度由条件边决定是否跳过；fast 不执行）──
+async function buildGraph(state: StateT): Promise<Partial<StateT>> {
+  const collected = state.collected;
+  if (!collected || !state.model || !state.token) return {};
+  try {
+    // 抓取变更文件 import/require 区域（文件头前 80 行），供 AI 分析依赖关系
+    const files = collected.fileChanges.slice(0, 15).map((f) => f.file);
+    const heads: Record<string, string> = {};
+    for (const file of files) {
+      const head = await fetchFileHead(state, file);
+      if (head) heads[file] = head;
+    }
+    if (!Object.keys(heads).length) return { dependencyGraph: null };
+
+    const graph = await analyzeDependenciesWithAI(getProviderForModel(state.model), state, heads);
+    if (!graph) return { dependencyGraph: null };
+    // 同步更新 collected，供 contextSnapshot / generate 使用
+    return { dependencyGraph: graph, collected: { ...collected, dependencyGraph: graph } };
+  } catch (e) {
+    console.warn("[review] AI 依赖图分析失败（降级）:", (e as Error).message);
+    return { dependencyGraph: null };
+  }
+}
+
+/** 抓取某文件头部（import 区域）用于依赖分析；失败返回空串 */
+async function fetchFileHead(state: StateT, file: string, limit = 80): Promise<string> {
+  try {
+    const ref = state.collected?.prInfo.headSha || state.collected?.prInfo.baseBranch || "HEAD";
+    if (state.platform === "gitee") {
+      const res = await gitee.getContents(state.token!, state.owner, state.repo, file, ref);
+      const entry = res as any;
+      if (entry && !Array.isArray(entry) && (entry.content || entry.base64Content)) {
+        const decoded = Buffer.from(String(entry.content || entry.base64Content), "base64").toString("utf-8");
+        return decoded.split("\n").slice(0, limit).join("\n");
+      }
+      return "";
+    }
+    const content = await fetchFileContent(state.owner, state.repo, file, ref);
+    return content ? content.split("\n").slice(0, limit).join("\n") : "";
+  } catch {
+    return "";
+  }
+}
+
+/** 用 AI 分析依赖关系，输出结构化 DependencyGraph */
+async function analyzeDependenciesWithAI(
+  provider: ReturnType<typeof getProviderForModel>,
+  state: StateT,
+  heads: Record<string, string>,
+): Promise<DependencyGraph | null> {
+  const systemPrompt =
+    "你是代码依赖分析器。分析给定文件的 import/require/use/from 等导入语句，输出代码依赖关系。只输出 JSON（不要 markdown 代码块）：" +
+    '{"edges":[{"from":"文件名","to":"被依赖文件","type":"import"}],"externalDependents":["可能引用这些文件的其他文件"]}。' +
+    "规则：edges 的 from 必须是给定的变更文件之一（表示 from 依赖 to）；type 取值 import|require|dynamic-import；externalDependents 依据导入语义推断可能受影响但未列出的文件，无法确定时给空数组。";
+  const userMessage =
+    "本次 PR 变更文件的文件头（import/require 区域，前 80 行）：\n" +
+    Object.entries(heads)
+      .map(([f, c]) => `### ${f}\n${c}`)
+      .join("\n\n");
+  try {
+    const result = await provider.analyze({
+      systemPrompt,
+      userMessage,
+      temperature: 0,
+      maxTokens: 1024,
+    });
+    const raw = parseAIResponse(result.content) as {
+      edges?: { from?: string; to?: string; type?: string }[];
+      externalDependents?: string[];
+    };
+    const edges: DependencyEdge[] = (Array.isArray(raw?.edges) ? raw.edges : [])
+      .filter((e) => e && typeof e.from === "string" && typeof e.to === "string")
+      .slice(0, 60)
+      .map((e) => ({
+        from: e.from!,
+        to: e.to!,
+        type: (["import", "require", "dynamic-import"].includes(e.type ?? "")
+          ? e.type
+          : "import") as DependencyEdge["type"],
+      }));
+    const externalDependents = Array.isArray(raw?.externalDependents)
+      ? raw.externalDependents.filter((x): x is string => typeof x === "string").slice(0, 20)
+      : [];
+    return { edges, externalDependents };
+  } catch (e) {
+    console.warn("[review] AI 依赖图调用失败:", (e as Error).message);
+    return null;
+  }
+}
+
 // ── 节点：汇总合并 ──
 async function merge(state: StateT): Promise<Partial<StateT>> {
   const all: RawFinding[] = [];
@@ -231,8 +350,19 @@ async function merge(state: StateT): Promise<Partial<StateT>> {
     outputTokens += r.usage?.outputTokens ?? 0;
   }
 
-  const risks = normalizeRisks(all);
+  let risks = applyRiskThreshold(normalizeRisks(all), state.riskThreshold);
+  // 仅审查变更行：只保留行号确实落在 diff 变更行集合内的问题（与审查深度正交，深度决定上下文）
+  if (state.diffOnly) {
+    const changedLines = buildChangedLines(state.collected?.diff ?? "");
+    if (changedLines.size > 0) {
+      risks = risks.filter((r) => r.file && r.line > 0 && changedLines.get(r.file)?.has(r.line));
+    } else {
+      // diff 无法解析（如 Gitee 拼接的片段）时回退：仅保留能定位到文件/行的风险
+      risks = risks.filter((r) => r.file && r.line > 0);
+    }
+  }
   const riskLevel = computeRiskLevel(risks);
+  const maxComments = state.maxComments || 10;
 
   // 审查评论：把高危问题转为 concern 评论 + 一条整体正面总结
   const reviewComments: ReviewComment[] = [
@@ -244,7 +374,7 @@ async function merge(state: StateT): Promise<Partial<StateT>> {
           ? `AI 审查概览：\n${summaries.map((s) => `- ${s}`).join("\n")}`
           : "AI 审查完成，未发现明显问题。",
     },
-    ...risks.slice(0, 10).map((r, i) => ({
+    ...risks.slice(0, maxComments).map((r, i) => ({
       id: `comment-${i + 1}`,
       type: "concern" as const,
       comment: `${r.title}${r.file ? `（${r.file}${r.line ? `:${r.line}` : ""}）` : ""}\n${r.description}${r.suggestion ? `\n建议：${r.suggestion}` : ""}`,
@@ -296,7 +426,7 @@ async function generate(state: StateT): Promise<Partial<StateT>> {
       analysisRunId: state.runId ?? undefined,
       analyzedAt: new Date().toISOString(),
       cacheHit: false,
-      prUrl: `https://github.com/${state.owner}/${state.repo}/pull/${state.prNumber}`,
+      prUrl: `${state.platform === "gitee" ? "https://gitee.com" : "https://github.com"}/${state.owner}/${state.repo}/pull/${state.prNumber}`,
       depth: state.depth,
       contextSnapshot: buildContextSnapshot(collected, state.diffTruncated),
     },
@@ -380,18 +510,40 @@ async function generate(state: StateT): Promise<Partial<StateT>> {
         );
       }
 
+      // 审查结果已落库，主动失效该用户相关缓存（dashboard/repos/pulls/contributions），
+      // 消除"外部变更但要等 TTL/手动同步才可见"问题；失败仅降级不影响审查结果与落库
+      try {
+        await cacheDel(`${state.platform}:dashboard:${state.userId}`);
+        await cacheDel(`${state.platform}:repos:${state.userId}`);
+        await cacheDelPattern(`${state.platform}:pulls:${state.userId}:*`);
+        await cacheDelPattern(`${state.platform}:contributions:${state.userId}:*`);
+      } catch (e) {
+        console.warn("[review] 缓存主动失效失败（降级）:", (e as Error).message);
+      }
+
       // 通知：审查完成（待用户处理）
       try {
         await ensureNotificationTables();
-        await insertNotification({
+        const notiTitle = `PR #${state.prNumber} 审查完成 · ${state.riskLevel} · ${state.risks.length} 个问题`;
+        const inserted = await insertNotification({
           userId: state.userId,
           type: "review_completed",
-          title: `PR #${state.prNumber} 审查完成 · ${state.riskLevel} · ${state.risks.length} 个问题`,
+          title: notiTitle,
           body: `${state.owner}/${state.repo} · ${collected.prInfo.title.slice(0, 120)}`,
           link: "/review",
           bizType: "review_job",
           bizId: String(jobId),
+          platform: state.platform,
         });
+        // 仅当真正新增通知时才实时广播，避免重复事件导致的重复通知/重复推送
+        if (inserted) {
+          await redisPublish(NOTIFY_CHANNEL, {
+            userId: state.userId,
+            type: "review_completed",
+            title: notiTitle,
+            link: "/review",
+          });
+        }
       } catch (e) {
         console.warn("[review] 写入通知失败（降级）:", (e as Error).message);
       }
@@ -410,13 +562,40 @@ async function generate(state: StateT): Promise<Partial<StateT>> {
     }
   }
 
+  // 可选：设置提交状态检查（set_status，仅 GitHub）
+  if (state.writeStatus && state.token && state.platform === "github" && collected.prInfo.headSha) {
+    try {
+      const statusState =
+        state.riskLevel === "high" ? "failure" : state.riskLevel === "medium" ? "pending" : "success";
+      await fetch(
+        `https://api.github.com/repos/${state.owner}/${state.repo}/statuses/${collected.prInfo.headSha}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${state.token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "ai-pr-review/1.0",
+          },
+          body: JSON.stringify({
+            state: statusState,
+            context: "AI PR Review",
+            description: `${state.riskLevel} · ${state.risks.length} 个问题`,
+          }),
+        },
+      );
+    } catch (e) {
+      console.warn("[review] 设置提交状态失败:", (e as Error).message);
+    }
+  }
+
   return { result: response, latencyMs, writtenReview };
 }
 
 async function writeGithubReview(state: StateT, response: AnalysisResponse): Promise<boolean> {
   const comments = response.risks
     .filter((r) => r.file && r.line > 0)
-    .slice(0, 10)
+    .slice(0, state.maxComments || 10)
     .map((r) => ({
       path: r.file,
       line: r.line,
@@ -488,9 +667,69 @@ function computeRiskLevel(risks: Risk[]): "low" | "medium" | "high" {
   return "low";
 }
 
+/**
+ * 解析 diff，构建「文件 → 变更行号集合」。
+ * 变更行 = 新文件中被新增/修改的行（`+` 开头，含 hunk 头 `@@ -a,b +c,d @@` 定位行号）。
+ * 无法解析（如非标准 diff）时该文件不加入集合。
+ */
+function buildChangedLines(diff: string): Map<string, Set<number>> {
+  const map = new Map<string, Set<number>>();
+  let curFile: string | null = null;
+  let newLine = 0;
+  let inHunk = false;
+  for (const raw of diff.split("\n")) {
+    const line = raw;
+    if (line.startsWith("diff --git ")) {
+      const m = line.match(/diff --git a\/(.+?) b\//);
+      curFile = m ? m[1] : null;
+      if (curFile) map.set(curFile, new Set());
+      inHunk = false;
+      continue;
+    }
+    if (!inHunk || !curFile) {
+      const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (hunk) {
+        newLine = Number(hunk[2]);
+        inHunk = true;
+      }
+      continue;
+    }
+    if (line.startsWith("+")) {
+      if (!line.startsWith("+++")) map.get(curFile)!.add(newLine);
+      newLine += 1;
+    } else if (!line.startsWith("-")) {
+      newLine += 1;
+    }
+  }
+  return map;
+}
+
+/**
+ * 应用风险阈值（全局设置「宽松 / 默认 / 严格」）：
+ * - 宽松：medium 降为 low（只把 high/critical 视为风险，更宽容）
+ * - 严格：low 升为 medium、medium 升为 high（更严格）
+ * - 默认：保持模型原判定
+ */
+function applyRiskThreshold(risks: Risk[], threshold: string): Risk[] {
+  if (threshold === "宽松") {
+    return risks.map((r) => (r.severity === "medium" ? { ...r, severity: "low" as const } : r));
+  }
+  if (threshold === "严格") {
+    return risks.map((r) =>
+      r.severity === "low"
+        ? { ...r, severity: "medium" as const }
+        : r.severity === "medium"
+          ? { ...r, severity: "high" as const }
+          : r,
+    );
+  }
+  return risks;
+}
+
 // ── 图 ──
 const graph = new StateGraph(ReviewState)
   .addNode("prepare", prepare)
+  .addNode("build_graph", buildGraph)
   .addNode("bug", dimensionNode("bug"))
   .addNode("security", dimensionNode("security"))
   .addNode("performance", dimensionNode("performance"))
@@ -499,10 +738,16 @@ const graph = new StateGraph(ReviewState)
   .addNode("validate", validate)
   .addNode("generate", generate)
   .addEdge(START, "prepare")
-  .addEdge("prepare", "bug")
-  .addEdge("prepare", "security")
-  .addEdge("prepare", "performance")
-  .addEdge("prepare", "quality")
+  // 按审查深度决定是否执行依赖图 AI 分析节点：fast 跳过（直接并行维度），standard/deep 先构建依赖图
+  .addConditionalEdges("prepare", (state) =>
+    state.depth === "fast"
+      ? ["bug", "security", "performance", "quality"]
+      : ["build_graph"],
+  )
+  .addEdge("build_graph", "bug")
+  .addEdge("build_graph", "security")
+  .addEdge("build_graph", "performance")
+  .addEdge("build_graph", "quality")
   .addEdge("bug", "merge")
   .addEdge("security", "merge")
   .addEdge("performance", "merge")
@@ -524,6 +769,16 @@ export interface RunReviewInput {
   platform?: "github" | "gitee";
   /** 用户偏好的模型（来自全局设置，空则自动选择） */
   preferredModel?: string | null;
+  /** 风险阈值：宽松 | 默认 | 严格（默认「默认」） */
+  riskThreshold?: string | null;
+  /** 采样温度（默认 0.1） */
+  temperature?: number;
+  /** 单次最大评论数（默认 10） */
+  maxComments?: number;
+  /** 仅审查变更行（默认关闭） */
+  diffOnly?: boolean;
+  /** 设置提交状态检查（默认关闭） */
+  writeStatus?: boolean;
 }
 
 export interface RunReviewResult {
@@ -546,6 +801,11 @@ export async function runReview(input: RunReviewInput): Promise<RunReviewResult>
     userId: input.userId ?? null,
     platform: input.platform ?? "github",
     preferredModel: input.preferredModel ?? null,
+    riskThreshold: input.riskThreshold ?? "默认",
+    temperature: input.temperature ?? 0.1,
+    maxComments: input.maxComments ?? 10,
+    diffOnly: input.diffOnly ?? false,
+    writeStatus: input.writeStatus ?? false,
     collected: null,
     model: null,
     modelProviderName: null,

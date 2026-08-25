@@ -319,6 +319,24 @@ async function ensureColumns(
   }
 }
 
+/** 把已存在且 NOT NULL 无默认值的列修正为可空（兼容旧版表结构，幂等） */
+async function ensureColumnNullable(
+  p: mysql.Pool,
+  table: string,
+  column: string,
+  nullableDdl: string,
+): Promise<void> {
+  const [rows] = await p.query<any>(
+    `SELECT IS_NULLABLE FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column],
+  );
+  const col = rows?.[0];
+  if (!col) return; // 列不存在则忽略
+  if (col.IS_NULLABLE === "YES") return; // 已可空
+  await p.query(`ALTER TABLE ${table} MODIFY COLUMN ${nullableDdl}`);
+}
+
 export interface WebhookSubscription {
   id: number;
   ownerId: number;
@@ -411,17 +429,21 @@ export async function upsertWebhookConfig(input: {
 /** 接收端点用：该平台所有启用的全局端点 secret（解密后），用于逐一验签 */
 export async function listWebhookSecrets(
   provider: OAuthProvider,
-): Promise<{ ownerId: number; secret: string }[]> {
+): Promise<{ ownerId: number; secret: string; events: string[] }[]> {
   const p = getPool();
   if (!p) return [];
   const [rows] = await p.query<any>(
-    `SELECT owner_id, secret_enc FROM webhook_subscription
+    `SELECT owner_id, secret_enc, events FROM webhook_subscription
      WHERE platform = ? AND repository_id IS NULL AND enabled = 1 AND secret_enc IS NOT NULL`,
     [provider],
   );
   return (rows || [])
-    .map((r: any) => ({ ownerId: r.owner_id, secret: decryptToken(r.secret_enc) }))
-    .filter((x: { secret: string | null }) => !!x.secret) as { ownerId: number; secret: string }[];
+    .map((r: any) => ({
+      ownerId: r.owner_id,
+      secret: decryptToken(r.secret_enc),
+      events: Array.isArray(r.events) ? r.events : r.events ? String(r.events).split(",") : [],
+    }))
+    .filter((x: { secret: string | null }) => !!x.secret) as { ownerId: number; secret: string; events: string[] }[];
 }
 
 /** 写入一条 webhook 事件日志；delivery 幂等（重复投递返回 false） */
@@ -584,6 +606,7 @@ export async function ensureReviewTables(): Promise<void> {
     category      VARCHAR(32) DEFAULT NULL,
     source        VARCHAR(16) NOT NULL DEFAULT 'ai',
     status        VARCHAR(16) NOT NULL DEFAULT 'pending',
+    comment_id    VARCHAR(64) DEFAULT NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -600,9 +623,16 @@ export async function ensureReviewTables(): Promise<void> {
     { name: "decision", ddl: "decision VARCHAR(16) NOT NULL DEFAULT 'PENDING'" },
     { name: "result_json", ddl: "result_json LONGTEXT" },
   ]);
+  // 旧版表的 repository_id / pull_request_id 为 NOT NULL 无默认值，会导致插入缺默认值失败；改为可空
+  await ensureColumnNullable(p, "ai_review_job", "repository_id", "repository_id BIGINT UNSIGNED DEFAULT NULL");
+  await ensureColumnNullable(p, "ai_review_job", "pull_request_id", "pull_request_id BIGINT UNSIGNED DEFAULT NULL");
   await ensureColumns(p, "review_issue", [
     { name: "repo_full_name", ddl: "repo_full_name VARCHAR(255) NOT NULL DEFAULT ''" },
+    { name: "comment_id", ddl: "comment_id VARCHAR(64) DEFAULT NULL" },
   ]);
+  // 旧版 review_issue 同样存在 NOT NULL 无默认值的 repository_id / pull_request_id
+  await ensureColumnNullable(p, "review_issue", "repository_id", "repository_id BIGINT UNSIGNED DEFAULT NULL");
+  await ensureColumnNullable(p, "review_issue", "pull_request_id", "pull_request_id BIGINT UNSIGNED DEFAULT NULL");
   await ensureUniqueKey(p, "ai_review_job", "uk_owner_pr_sha", "owner_id, pr_number, commit_sha");
 }
 
@@ -735,31 +765,28 @@ export async function replaceReviewIssues(
   await p.execute(`DELETE FROM review_issue WHERE job_id=?`, [jobId]);
   if (!issues.length) return;
   const values: Array<string | number | null> = [];
+  // 每个 issue 按列顺序推入全部 14 个值（owner_id, job_id, pr_number, repo_full_name, kind, severity, title, description, file, line, code, suggestion, confidence, category）
   const placeholders = issues
-    .map(() => {
+    .map((it) => {
       values.push(
         userId,
         jobId,
         prNumber,
         repoFullName,
+        it.kind,
+        it.severity ?? null,
+        it.title,
+        it.description ?? null,
+        it.file ?? null,
+        it.line ?? null,
+        it.code ?? null,
+        it.suggestion ?? null,
+        it.confidence ?? null,
+        it.category ?? null,
       );
-      return "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+      return "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     })
     .join(",");
-  for (const it of issues) {
-    values.push(
-      it.kind,
-      it.severity ?? null,
-      it.title,
-      it.description ?? null,
-      it.file ?? null,
-      it.line ?? null,
-      it.code ?? null,
-      it.suggestion ?? null,
-      it.confidence ?? null,
-      it.category ?? null,
-    );
-  }
   await p.execute(
     `INSERT INTO review_issue
       (owner_id, job_id, pr_number, repo_full_name, kind, severity, title, description,
@@ -783,6 +810,49 @@ export async function listReviewJobs(
             latency_ms, result_json, completed_at, created_at
      FROM ai_review_job
      WHERE owner_id = ? AND platform = ?
+     ORDER BY id DESC LIMIT ?`,
+    [userId, platform, limit],
+  );
+  return (rows || []).map((r: any) => ({
+    id: r.id,
+    prNumber: r.pr_number,
+    repoFullName: r.repo_full_name,
+    prTitle: r.pr_title ?? null,
+    commitSha: r.commit_sha,
+    status: r.status,
+    decision: r.decision,
+    summary: r.summary ?? null,
+    riskLevel: r.risk_level ?? null,
+    riskCount: Number(r.risk_count ?? 0),
+    suggestionCount: Number(r.suggestion_count ?? 0),
+    positiveCount: Number(r.positive_count ?? 0),
+    model: r.model ?? null,
+    provider: r.provider ?? null,
+    depth: r.depth ?? null,
+    latencyMs: r.latency_ms ?? null,
+    result: r.result_json ? safeParseJson(r.result_json) : null,
+    completedAt: r.completed_at ? new Date(r.completed_at) : null,
+    createdAt: new Date(r.created_at),
+  }));
+}
+
+/**
+ * 待审队列：仅返回「已分析完成（status='COMPLETED'）且尚未处理（decision='PENDING'）」的审查。
+ * 过滤掉：分析中的任务（避免详情尚未生成时点击落空）+ 已处理过的审查。
+ */
+export async function listPendingReviewJobs(
+  userId: number,
+  platform: OAuthProvider,
+  limit = 30,
+): Promise<ReviewJobResult[]> {
+  const p = getPool();
+  if (!p) return [];
+  const [rows] = await p.query<any>(
+    `SELECT id, pr_number, repo_full_name, pr_title, commit_sha, status, decision, summary,
+            risk_level, risk_count, suggestion_count, positive_count, model, provider, depth,
+            latency_ms, result_json, completed_at, created_at
+     FROM ai_review_job
+     WHERE owner_id = ? AND platform = ? AND status = 'COMPLETED' AND decision = 'PENDING'
      ORDER BY id DESC LIMIT ?`,
     [userId, platform, limit],
   );
@@ -845,6 +915,14 @@ export async function getReviewJob(userId: number, jobId: number): Promise<Revie
   };
 }
 
+/** 删除一次审查 Job 及其关联问题（审查历史删除） */
+export async function deleteReviewJob(userId: number, jobId: number): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  await p.execute(`DELETE FROM review_issue WHERE owner_id = ? AND job_id = ?`, [userId, jobId]);
+  await p.execute(`DELETE FROM ai_review_job WHERE owner_id = ? AND id = ?`, [userId, jobId]);
+}
+
 /** 用户决策（批准 / 请求变更 / 已评论等） */
 export async function updateReviewDecision(
   userId: number,
@@ -863,11 +941,11 @@ export async function updateReviewDecision(
 export async function listReviewIssues(
   userId: number,
   jobId: number,
-): Promise<{ id: number; kind: string; severity: string | null; title: string; description: string | null; file: string | null; line: number | null; code: string | null; suggestion: string | null; category: string | null; status: string }[]> {
+): Promise<{ id: number; kind: string; severity: string | null; title: string; description: string | null; file: string | null; line: number | null; code: string | null; suggestion: string | null; category: string | null; status: string; commentId: string | null }[]> {
   const p = getPool();
   if (!p) return [];
   const [rows] = await p.query<any>(
-    `SELECT id, kind, severity, title, description, file, line, code, suggestion, category, status
+    `SELECT id, kind, severity, title, description, file, line, code, suggestion, category, status, comment_id
      FROM review_issue WHERE owner_id=? AND job_id=? ORDER BY id`,
     [userId, jobId],
   );
@@ -883,21 +961,30 @@ export async function listReviewIssues(
     suggestion: r.suggestion ?? null,
     category: r.category ?? null,
     status: r.status,
+    commentId: r.comment_id ?? null,
   }));
 }
 
-/** 采纳 / 忽略某条建议 */
+/** 采纳 / 忽略 / 取消（pending）某条建议；commentId 用于记录回写评论 id（undefined 不动，null 清空） */
 export async function updateReviewIssueStatus(
   userId: number,
   issueId: number,
-  status: "accepted" | "dismissed",
+  status: "accepted" | "dismissed" | "pending",
+  commentId?: string | null,
 ): Promise<void> {
   const p = getPool();
   if (!p) return;
-  await p.execute(
-    `UPDATE review_issue SET status=? WHERE owner_id=? AND id=?`,
-    [status, userId, issueId],
-  );
+  if (commentId === undefined) {
+    await p.execute(
+      `UPDATE review_issue SET status=? WHERE owner_id=? AND id=?`,
+      [status, userId, issueId],
+    );
+  } else {
+    await p.execute(
+      `UPDATE review_issue SET status=?, comment_id=? WHERE owner_id=? AND id=?`,
+      [status, commentId, userId, issueId],
+    );
+  }
 }
 
 function safeParseJson(raw: string): Record<string, unknown> | null {
@@ -930,6 +1017,13 @@ export async function ensureNotificationTables(): Promise<void> {
     KEY idx_user_read (user_id, read_status, created_at),
     KEY idx_type_time (type, created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  // 历史表无 platform 列：补齐（空串视为「未标注平台」，按平台过滤时兼容显示）
+  await ensureColumns(p, "notification", [
+    { name: "platform", ddl: "platform VARCHAR(16) NOT NULL DEFAULT ''" },
+  ]);
+  // 幂等通知：同一 (用户, 业务类型, 业务id) 只保留一条
+  // （防止同一 PR 的 opened/synchronize 等重复事件触发多次审查，产生重复通知）
+  await ensureUniqueKey(p, "notification", "uk_user_biz", "user_id, biz_type, biz_id");
 }
 
 export interface NotificationItem {
@@ -942,7 +1036,7 @@ export interface NotificationItem {
   createdAt: Date;
 }
 
-/** 写入一条通知 */
+/** 写入一条通知；借助 (user_id,biz_type,biz_id) 唯一键幂等，重复返回 false（供调用方避免重复广播） */
 export async function insertNotification(input: {
   userId: number;
   type: string;
@@ -951,12 +1045,13 @@ export async function insertNotification(input: {
   link?: string | null;
   bizType?: string | null;
   bizId?: string | null;
-}): Promise<void> {
+  platform?: string;
+}): Promise<boolean> {
   const p = getPool();
-  if (!p) return;
-  await p.execute(
-    `INSERT INTO notification (user_id, type, title, body, link, biz_type, biz_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  if (!p) return true;
+  const [result] = await p.execute(
+    `INSERT IGNORE INTO notification (user_id, type, title, body, link, biz_type, biz_id, platform)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.userId,
       input.type,
@@ -965,21 +1060,25 @@ export async function insertNotification(input: {
       input.link ?? null,
       input.bizType ?? null,
       input.bizId ?? null,
+      input.platform ?? "",
     ],
   );
+  return (result as mysql.ResultSetHeader).affectedRows > 0;
 }
 
-/** 通知列表（最新在前） */
+/** 通知列表（最新在前；仅当前平台，兼容无平台标注的历史数据） */
 export async function listNotifications(
   userId: number,
+  provider: OAuthProvider,
   limit = 30,
 ): Promise<NotificationItem[]> {
   const p = getPool();
   if (!p) return [];
   const [rows] = await p.query<any>(
     `SELECT id, type, title, body, link, read_status, created_at
-     FROM notification WHERE user_id = ? ORDER BY id DESC LIMIT ?`,
-    [userId, limit],
+     FROM notification WHERE user_id = ? AND (platform = ? OR platform = '')
+     ORDER BY id DESC LIMIT ?`,
+    [userId, provider, limit],
   );
   return (rows || []).map((r: any) => ({
     id: r.id,
@@ -992,34 +1091,47 @@ export async function listNotifications(
   }));
 }
 
-/** 未读数量 */
-export async function countUnreadNotifications(userId: number): Promise<number> {
+/** 未读数量（仅当前平台，兼容无平台标注的历史数据） */
+export async function countUnreadNotifications(userId: number, provider: OAuthProvider): Promise<number> {
   const p = getPool();
   if (!p) return 0;
   const [rows] = await p.query<any>(
-    `SELECT COUNT(*) AS n FROM notification WHERE user_id = ? AND read_status = 0`,
-    [userId],
+    `SELECT COUNT(*) AS n FROM notification
+     WHERE user_id = ? AND read_status = 0 AND (platform = ? OR platform = '')`,
+    [userId, provider],
   );
   return Number(rows?.[0]?.n ?? 0);
 }
 
-/** 标记单条已读 */
-export async function markNotificationRead(userId: number, id: number): Promise<void> {
+/** 标记单条已读（仅当前平台） */
+export async function markNotificationRead(userId: number, id: number, provider: OAuthProvider): Promise<void> {
   const p = getPool();
   if (!p) return;
   await p.execute(
-    `UPDATE notification SET read_status = 1, read_at = NOW() WHERE user_id = ? AND id = ?`,
-    [userId, id],
+    `UPDATE notification SET read_status = 1, read_at = NOW()
+     WHERE user_id = ? AND id = ? AND (platform = ? OR platform = '')`,
+    [userId, id, provider],
   );
 }
 
-/** 全部标记已读 */
-export async function markAllNotificationsRead(userId: number): Promise<void> {
+/** 全部标记已读（仅当前平台） */
+export async function markAllNotificationsRead(userId: number, provider: OAuthProvider): Promise<void> {
   const p = getPool();
   if (!p) return;
   await p.execute(
-    `UPDATE notification SET read_status = 1, read_at = NOW() WHERE user_id = ? AND read_status = 0`,
-    [userId],
+    `UPDATE notification SET read_status = 1, read_at = NOW()
+     WHERE user_id = ? AND read_status = 0 AND (platform = ? OR platform = '')`,
+    [userId, provider],
+  );
+}
+
+/** 删除单条通知（仅当前平台） */
+export async function deleteNotification(userId: number, id: number, provider: OAuthProvider): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  await p.execute(
+    `DELETE FROM notification WHERE user_id = ? AND id = ? AND (platform = ? OR platform = '')`,
+    [userId, id, provider],
   );
 }
 
@@ -1212,4 +1324,29 @@ export async function setSetting(userId: number, key: string, value: string): Pr
      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
     [userId, key, value],
   );
+}
+
+/** 控制台审查洞察：累计审查 / 检出问题 / 待处理 / 一次通过率（无风险 PR 占比） */
+export async function getReviewStats(
+  userId: number,
+  platform: OAuthProvider,
+): Promise<{ totalReviews: number; riskyReviews: number; totalRisks: number; pendingReviews: number; passRate: number }> {
+  const p = getPool();
+  if (!p) return { totalReviews: 0, riskyReviews: 0, totalRisks: 0, pendingReviews: 0, passRate: 0 };
+  const [rows] = await p.query<any>(
+    `SELECT COUNT(*) AS total, SUM(risk_count > 0) AS risky, SUM(risk_count) AS risks,
+            SUM(decision = 'PENDING') AS pending
+     FROM ai_review_job WHERE owner_id = ? AND platform = ? AND status = 'COMPLETED'`,
+    [userId, platform],
+  );
+  const r = rows?.[0] ?? {};
+  const total = Number(r.total ?? 0);
+  const risky = Number(r.risky ?? 0);
+  return {
+    totalReviews: total,
+    riskyReviews: risky,
+    totalRisks: Number(r.risks ?? 0),
+    pendingReviews: Number(r.pending ?? 0),
+    passRate: total > 0 ? Math.round(((total - risky) / total) * 100) : 0,
+  };
 }
