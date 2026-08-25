@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仓库列表 — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .rep-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:22px; }
+  .rep-actions .search-in { position:relative; flex:1; min-width:200px; }
+  .rep-actions .search-in svg { position:absolute; left:11px; top:10px; width:16px;height:16px;color:var(--text-3); }
+  .rep-actions .search-in input {
+    width:100%; height:38px; background:var(--ink-850); border:1px solid var(--line);
+    border-radius:var(--r-s); padding:0 12px 0 34px; color:var(--text-1); font-size:13px;
+  }
+  .rep-actions .search-in input:focus { outline:none; border-color:var(--amber); box-shadow:var(--ring); }
+  .rep-card { cursor:pointer; display:flex; flex-direction:column; }
+  .rep-card:hover { border-color:var(--line-strong); transform:translateY(-2px); box-shadow:var(--shadow-m); }
+  .rep-card .top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .rep-name { font-family:var(--font-display); font-weight:600; font-size:15px; }
+  .rep-name b { color:var(--amber); font-weight:600; }
+  .rep-owner { color:var(--text-3); font-size:12.5px; font-family:var(--font-mono); margin-top:1px; }
+  .rep-desc { color:var(--text-2); font-size:13px; line-height:1.55; margin:12px 0 14px; min-height:40px; }
+  .rep-foot { display:flex; align-items:center; gap:14px; color:var(--text-3); font-size:12.5px; margin-top:auto; }
+  .rep-foot .it { display:inline-flex; align-items:center; gap:5px; }
+  .rep-foot .pulse-dot { width:7px; height:7px; border-radius:50%; background:var(--amber); animation:pulse 1.6s infinite; }
+
+  .pager { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:22px; color:var(--text-3); font-size:12.5px; }
+</style>
+</head>
+
+<body data-page="repos">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        仓库<span style="opacity:.5">/</span><b style="color:var(--text-1)">仓库列表</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <button class="btn btn-outline btn-sm">同步数据</button>
+        <a class="btn btn-amber btn-sm" href="#">接入仓库</a>
+      </div>
+    </header>
+
+    <div class="app-content">
+
+      <div class="page-head-admin">
+        <div>
+          <h1 class="split-title">仓库<b class="accent">列表</b></h1>
+          <div class="sub">接入你的 GitHub 与 Gitee 仓库，一键开启 AI 自动审查。</div>
+        </div>
+        <div class="act">
+          <span class="status-pill"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span> 已同步 · 23 个仓库</span>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <section class="grid-4" style="margin-bottom:22px">
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><div class="stat-num mono" data-count="23"><span>0</span></div><div class="stat-label">总仓库</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><div class="stat-num mono" data-count="12"><span>0</span></div><div class="stat-label">已开启审查</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;color:#fff"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/></svg></span><div class="stat-num mono" data-count="19" data-suffix=""><span>0</span></div><div class="stat-label">GitHub 仓库</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;color:#c71d23"><circle cx="12" cy="12" r="10"/></svg></span><div class="stat-num mono" data-count="4" data-suffix=""><span>0</span></div><div class="stat-label">Gitee 仓库</div></div></div>
+      </section>
+
+      <!-- 筛选 -->
+      <div class="rep-actions" data-reveal>
+        <div class="seg" id="plat">
+          <button class="active" data-p="all">全部</button>
+          <button data-p="github">GitHub</button>
+          <button data-p="gitee">Gitee</button>
+        </div>
+        <div class="search-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+          <input type="search" placeholder="搜索仓库名称…" aria-label="搜索仓库">
+        </div>
+      </div>
+
+      <!-- 仓库网格 -->
+      <div class="grid-3" id="repos" data-stagger="0.08">
+
+        <a class="card card-pad rep-card" data-plat="github" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">ai-pr-<b>review</b></div><div class="rep-owner">nicepkg · GitHub</div></div>
+            <span class="tag tag-amber pulse"><span class="dot"></span>审查中</span>
+          </div>
+          <p class="rep-desc">AI 代码审查平台核心仓库，Webhook 自动审查与多模型路由。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-ts"></span>TypeScript</span><span class="it">★128</span><span class="it"><span class="pulse-dot"></span>2 待审</span><span class="it" style="margin-left:auto">2 小时前</span></div>
+        </a>
+
+        <a class="card card-pad rep-card" data-plat="github" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">nextjs-<b>blog</b></div><div class="rep-owner">nicepkg · GitHub</div></div>
+            <span class="tag tag-green"><span class="dot"></span>已开启</span>
+          </div>
+          <p class="rep-desc">Next.js 14 + MDX 博客主题，SSR 与静态渲染示例。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-ts"></span>TypeScript</span><span class="it">★56</span><span class="it"><span class="pulse-dot"></span>0 待审</span><span class="it" style="margin-left:auto">昨天</span></div>
+        </a>
+
+        <a class="card card-pad rep-card" data-plat="gitee" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">ml-<b>toolkit</b></div><div class="rep-owner">nicepkg · Gitee</div></div>
+            <span class="tag tag-neutral">未开启</span>
+          </div>
+          <p class="rep-desc">数据预处理与模型评估的机器学习工具集。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-py"></span>Python</span><span class="it">★42</span><span class="it"><span class="pulse-dot"></span>2 待审</span><span class="it" style="margin-left:auto">3 天前</span></div>
+        </a>
+
+        <a class="card card-pad rep-card" data-plat="github" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">rust-<b>parser</b></div><div class="rep-owner">nicepkg · GitHub</div></div>
+            <span class="tag tag-green"><span class="dot"></span>已开启</span>
+          </div>
+          <p class="rep-desc">用 rust 编写的轻量异步 diff 解析库。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-rust"></span>Rust</span><span class="it">★89</span><span class="it"><span class="pulse-dot"></span>1 待审</span><span class="it" style="margin-left:auto">4 天前</span></div>
+        </a>
+
+        <a class="card card-pad rep-card" data-plat="gitee" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">go-<b>gateway</b></div><div class="rep-owner">nicepkg · Gitee</div></div>
+            <span class="tag tag-amber pulse"><span class="dot"></span>审查中</span>
+          </div>
+          <p class="rep-desc">基于 Go 的 API 网关，内置限流与鉴权中间件。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-go"></span>Go</span><span class="it">★67</span><span class="it"><span class="pulse-dot"></span>0 待审</span><span class="it" style="margin-left:auto">6 天前</span></div>
+        </a>
+
+        <a class="card card-pad rep-card" data-plat="github" href="repo.html" data-reveal>
+          <div class="top">
+            <div><div class="rep-name">ui-<b>design-system</b></div><div class="rep-owner">nicepkg · GitHub</div></div>
+            <span class="tag tag-neutral">未开启</span>
+          </div>
+          <p class="rep-desc">跨框架组件库与设计令牌，供 Forge 平台使用。</p>
+          <div class="rep-foot"><span class="it"><span class="lang-dot lang-js"></span>JavaScript</span><span class="it">★31</span><span class="it"><span class="pulse-dot"></span>0 待审</span><span class="it" style="margin-left:auto">1 周前</span></div>
+        </a>
+
+      </div>
+
+      <div class="pager">
+        <span>共 23 个仓库 · 当前显示 6</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" disabled>上一页</button>
+          <button class="btn btn-amber btn-sm">下一页</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  // 平台过滤 + 搜索
+  (function () {
+    var cards = Array.prototype.slice.call(document.querySelectorAll('#repos .rep-card'));
+    var platBtn = document.querySelector('#plat');
+    var search = document.querySelector('.search-in input');
+
+    function apply() {
+      var p = (platBtn.querySelector('.active') || {}).getAttribute && platBtn.querySelector('.active').getAttribute('data-p') || 'all';
+      var q = (search.value || '').toLowerCase();
+      cards.forEach(function (c) {
+        var show = (p === 'all' || c.getAttribute('data-plat') === p) &&
+                   c.querySelector('.rep-name').textContent.toLowerCase().indexOf(q) >= 0;
+        c.style.display = show ? '' : 'none';
+      });
+    }
+    platBtn.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        platBtn.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        apply();
+      });
+    });
+    search.addEventListener('input', apply);
+  })();
+</script>
+</body>
+</html>

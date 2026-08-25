@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReviewForge — AI PR Review 平台</title>
+<meta name="description" content="连接 GitHub / Gitee，自动审查你的 PR 变更，让 AI 成为你的代码审阅伙伴。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .hero {
+    position: relative; padding: 120px 0 90px; text-align: center; overflow: hidden;
+  }
+  .hero::before {
+    content:''; position:absolute; inset:0;
+    background:
+      radial-gradient(48% 44% at 50% 0%, rgba(232,163,61,0.14), transparent 62%),
+      radial-gradient(34% 40% at 82% 22%, rgba(167,155,255,0.1), transparent 60%);
+    pointer-events: none;
+  }
+  .hero .wrap { position: relative; }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: var(--r-full);
+    background: var(--amber-soft); border: 1px solid rgba(232,163,61,0.28);
+    color: var(--amber); font-size: 13px; font-weight: 600; margin-bottom: 26px;
+  }
+  .hero-eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); animation: pulse 1.6s infinite; }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(44px, 7vw, 76px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.02;
+    max-width: 900px; margin: 0 auto 22px;
+  }
+  .hero h1 .accent { color: var(--amber); }
+  .hero p.lead { font-size: 18px; color: var(--text-2); max-width: 620px; margin: 0 auto 38px; line-height: 1.7; }
+  .hero-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+
+  .hero-demo {
+    position: relative; margin-top: 76px; text-align: left;
+  }
+  .hero-demo .code-window { box-shadow: var(--shadow-m); }
+
+  .logos { padding: 46px 0; border-bottom: 1px solid var(--line); }
+  .logos p { text-align: center; color: var(--text-3); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 22px; }
+  .logo-row { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
+  .logo-row span { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--text-3); opacity: .8; }
+
+  .section-pad { padding: 96px 0; }
+  .section-label { display: inline-block; color: var(--amber); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 12px; }
+  .section-title { font-family: var(--font-display); font-size: clamp(30px, 4vw, 44px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; max-width: 640px; }
+  .section-sub { color: var(--text-2); font-size: 16px; margin-top: 14px; max-width: 56ch; }
+  .center { text-align: center; }
+  .center .section-sub { margin-inline: auto; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .step {
+    position: relative; padding: 30px 26px; border-radius: var(--r-l);
+    background: var(--ink-900); border: 1px solid var(--line);
+    box-shadow: var(--shadow-card);
+  }
+  .step .n {
+    width: 40px; height: 40px; border-radius: var(--r-s);
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: 600; font-size: 16px;
+    background: var(--amber-soft); color: var(--amber); margin-bottom: 18px;
+  }
+  .step h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .step p { color: var(--text-2); font-size: 13.5px; line-height: 1.6; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+  .split .sub { color: var(--text-2); font-size: 15.5px; line-height: 1.75; margin: 16px 0 26px; max-width: 48ch; }
+
+  .cta {
+    padding: 110px 0; text-align: center; position: relative; overflow: hidden;
+  }
+  .cta::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(50% 60% at 50% 100%, rgba(232,163,61,0.16), transparent 60%);
+  }
+  .cta-card {
+    position: relative; max-width: 720px; margin: 0 auto; padding: 64px 40px;
+    border-radius: 24px; background: var(--ink-900); border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-m);
+  }
+  .cta-card h2 { font-family: var(--font-display); font-size: 38px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 14px; }
+  .cta-card p { color: var(--text-2); font-size: 15.5px; margin-bottom: 30px; }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0; }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--text-3); font-size: 13px; }
+
+  .gh-btn { text-transform: none; }
+  .merge-ghost {
+    position:absolute; inset:0; pointer-events:none;
+    background: linear-gradient(110deg, transparent 30%, rgba(232,163,61,0.06) 45%, transparent 60%);
+  }
+</style>
+</head>
+
+<body>
+
+<!-- ================= TOPBAR ================= -->
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="ReviewForge 首页">
+      <span class="brand-mark">RF</span>
+      <span>Review<b>Forge</b></span>
+    </a>
+    <nav class="topbar-nav" aria-label="主导航">
+      <a href="#how">如何工作</a>
+      <a href="#insights">用户洞察</a>
+      <a href="#code">代码浏览</a>
+      <a href="#review">自动审查</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="btn btn-ghost btn-sm" href="dashboard.html">演示面板</a>
+      <a class="btn btn-amber btn-sm" href="login.html">登录</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-eyebrow"><span class="dot"></span> v2.0 · 全新平台架构</div>
+      <h1 class="split-title">
+        让每次代码变更<br>都被 <span class="accent highlight">认真审阅</span>
+      </h1>
+      <p class="lead">用你的 GitHub 或 Gitee 账号登录，查看提交活跃度、在线浏览代码，并在 PR 出现的那一刻获得 AI 的结构化审查评论。</p>
+      <div class="hero-actions">
+        <a class="btn btn-amber btn-lg" href="login.html">立即开始 · 免费</a>
+        <a class="btn btn-outline btn-lg" href="#how">查看工作方式</a>
+      </div>
+
+      <!-- Hero 演示窗口：一段真实审查还被琥珀高亮笔扫过 -->
+      <div class="hero-demo">
+        <div class="code-window" data-reveal>
+          <div class="cw-head">
+            <div class="cw-dots"><i></i><i></i><i></i></div>
+            <span class="cw-path">PR <b>#128</b> · src/handlers/upload.ts</span>
+            <span class="tag tag-amber" style="margin-left:auto">AI Review 进行中</span>
+          </div>
+          <div style="display:flex">
+            <div class="diff-body" style="flex:1; border:none; border-radius:0">
+              <div class="dln del">
+                <span class="num">31</span><span class="marker">-</span>
+                <span class="code"><span class="tok-kw">const</span> <span class="tok-var">size</span> = <span class="tok-var">req</span>.<span class="tok-var">file</span>.<span class="tok-fn">size</span>;</span>
+              </div>
+              <div class="dln add">
+                <span class="num">32</span><span class="marker">+</span>
+                <span class="code"><span class="tok-kw">const</span> <span class="tok-var">size</span> = <span class="tok-var">req</span>.<span class="tok-var">file</span>?.<span class="tok-var">size</span> ?? <span class="tok-num">0</span>;</span>
+                <span class="cmt-flag"></span>
+              </div>
+              <div class="dln add">
+                <span class="num">33</span><span class="marker">+</span>
+                <span class="code"><span class="tok-kw">if</span> (<span class="tok-var">size</span> > <span class="tok-num">10</span> * <span class="tok-num">1024</span> * <span class="tok-num">1024</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">'limit'</span>);</span>
+                <span class="cmt-flag"></span>
+              </div>
+              <div class="dln ctx"><span class="num">34</span><span class="marker"></span><span class="code">  <span class="tok-cm">// ...</span></span></div>
+            </div>
+            <div style="width:300px; border-left:1px solid var(--line); padding:14px 16px; background:var(--ink-900)">
+              <div class="rv" data-k="concern">
+                <div class="rv-head"><span class="rv-k">Risk</span><span class="rv-loc">L32</span></div>
+                <div class="rv-body"><code>req.file</code> 可能为 undefined，已用可选链兜底；但当文件缺失时应返回 400 而非静默为 0。</div>
+                <div class="rv-code hl-sweep">if (!req.file) throw new Error('missing')</div>
+                <div class="rv-actions">
+                  <button class="btn btn-amber btn-sm">采纳建议</button>
+                  <button class="btn btn-ghost btn-sm">忽略</button>
+                </div>
+              </div>
+              <div class="rv" data-k="suggestion" style="margin-top:12px">
+                <div class="rv-head"><span class="rv-k">Suggestion</span><span class="rv-loc">L33</span></div>
+                <div class="rv-body">超限阈值建议抽为常量 <code>MAX_UPLOAD_BYTES</code>，便于测试与复用。</div>
+                <div class="rv-actions">
+                  <button class="btn btn-amber btn-sm">采纳建议</button>
+                  <button class="btn btn-ghost btn-sm">忽略</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SOCIAL LOGOS ================= -->
+  <section class="logos">
+    <div class="wrap">
+      <p>接入你的代码，审查你的 PR</p>
+      <div class="logo-row">
+        <span>GitHub</span>
+        <span>Gitee</span>
+        <span>OpenAI</span>
+        <span>Anthropic</span>
+        <span>DeepSeek</span>
+        <span>自托管模型</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= HOW IT WORKS ================= -->
+  <section class="section-pad" id="how">
+    <div class="wrap">
+      <div class="center">
+        <div class="section-label">How it works</div>
+        <h2 class="section-title" style="margin-inline:auto">从授权登录到自动审查，三步完成</h2>
+        <p class="section-sub" style="margin-inline:auto">没有复杂的 Token 配置，没有多余的脚本——连接即用。</p>
+      </div>
+      <div class="steps" data-stagger="0.12" style="margin-top:52px">
+        <div class="step">
+          <div class="n">01</div>
+          <h3>授权登录</h3>
+          <p>用 GitHub 或 Gitee 账号一键 OAuth 登录，安全获取仓库访问权限。</p>
+        </div>
+        <div class="step">
+          <div class="n">02</div>
+          <h3>浏览与洞察</h3>
+          <p>查看提交活跃度热力图、仓库列表，在线浏览分支与代码文件。</p>
+        </div>
+        <div class="step">
+          <div class="n">03</div>
+          <h3>PR 自动审查</h3>
+          <p>PR 变化自动触发 AI，生成带风险等级的评论，可采纳、忽略或回写。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= INSIGHTS ================= -->
+  <section class="section-pad" id="insights" style="border-top:1px solid var(--line)">
+    <div class="wrap split">
+      <div data-reveal>
+        <div class="section-label">User Insights</div>
+        <h2 class="section-title">你的提交贡献，一眼看清</h2>
+        <p class="sub">登录后进入个人控制台：全年提交热力图、语言占比、最近活跃仓库与待审 PR 队列，所有数据来自你授权的平台。</p>
+        <a class="btn btn-amber" href="dashboard.html">查看演示控制台</a>
+      </div>
+      <div class="card card-pad" data-reveal style="background:var(--ink-950)">
+        <div class="head-between" style="margin-bottom:16px">
+          <span class="card-title">Commit Activity</span>
+          <div class="hm-legend">少 <span style="width:13px;height:13px;background:var(--ink-800);border-radius:3px;display:inline-block"></span><span style="width:13px;height:13px;background:rgba(232,163,61,.5);border-radius:3px;display:inline-block"></span><span style="width:13px;height:13px;background:var(--amber);border-radius:3px;display:inline-block"></span> 多</div>
+        </div>
+        <div class="heatmap-grid" id="hm" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CODE BROWSER ================= -->
+  <section class="section-pad" id="code">
+    <div class="wrap split">
+      <div class="card code-window" data-reveal style="box-shadow:var(--shadow-m)">
+        <div class="cw-head">
+          <div class="cw-dots"><i></i><i></i><i></i></div>
+          <span class="cw-path">nicepkg / ai-pr-review · <b>main</b> / src/app/page.tsx</span>
+        </div>
+        <div style="display:flex">
+          <div class="ftree" style="width:200px; border-right:1px solid var(--line); padding:12px">
+            <div class="f active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg> page.tsx</div>
+            <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg> layout.tsx</div>
+            <div class="f"><svg viewBox="0 0 24 24" fill="currentColor" class="folder-c"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg> lib</div>
+            <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg> package.json</div>
+            <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg> tsconfig.json</div>
+          </div>
+          <div class="diff-body mono" style="flex:1; border:none; border-radius:0; padding:12px 0; font-size:12.5px; line-height:1.8; overflow:auto">
+            <div class="dln"><span class="num">1</span><span class="marker"></span><span class="code"><span class="tok-kw">import</span> { <span class="tok-var">Dashboard</span> } <span class="tok-kw">from</span> <span class="tok-str">'@/components/Dashboard'</span>;</span></div>
+            <div class="dln"><span class="num">4</span><span class="marker"></span><span class="code"><span class="tok-kw">export default</span> <span class="tok-kw">function</span> <span class="tok-fn">Home</span>() {</span></div>
+            <div class="dln"><span class="num">5</span><span class="marker"></span><span class="code">  <span class="tok-kw">return</span> <span class="tok-type">&lt;Dashboard</span></span></div>
+            <div class="dln"><span class="num">6</span><span class="marker"></span><span class="code">    <span class="tok-var">repos</span>={<span class="tok-var">repositories</span>}</span></div>
+            <div class="dln"><span class="num">7</span><span class="marker"></span><span class="code">    <span class="tok-var">user</span>={<span class="tok-var">currentUser</span>}</span></div>
+            <div class="dln"><span class="num">8</span><span class="marker"></span><span class="code">  /&gt;);</span></div>
+            <div class="dln"><span class="num">9</span><span class="marker"></span><span class="code">}</span></div>
+          </div>
+        </div>
+      </div>
+      <div data-reveal>
+        <div class="section-label">Code Explorer</div>
+        <h2 class="section-title">在线浏览，不离开页面</h2>
+        <p class="sub">像在 IDE 里一样浏览仓库：文件树、分支切换、语法高亮。查看文件历史与单行 diff，发现需要关注的变更。</p>
+        <a class="btn btn-outline" href="repo.html">打开代码浏览器</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= REVIEW ================= -->
+  <section class="section-pad" id="review" style="border-top:1px solid var(--line)">
+    <div class="wrap">
+      <div class="center">
+        <div class="section-label">Auto Review</div>
+        <h2 class="section-title" style="margin-inline:auto">PR 一变，审核跟上</h2>
+        <p class="section-sub" style="margin-inline:auto">Webhook 即时触发，AI 提取变更、构建上下文、生成结构化审查，自动回写评论与检验状态。</p>
+      </div>
+      <div class="card card-pad" data-reveal style="margin-top:48px">
+        <div class="head-between" style="margin-bottom:20px">
+          <span class="card-title">审查流水线</span>
+          <span class="tag tag-amber pulse"><span class="dot"></span> 监听：github · gitee</span>
+        </div>
+        <div class="timeline">
+          <div class="tl done"><div class="tl-title">Pull Request 事件</div><div class="tl-sub">opened/synchronize · Webhook 验签通过</div></div>
+          <div class="tl done"><div class="tl-title">提取变更 Diff</div><div class="tl-sub">12 files · +84 / −21 · 上下文快照命中缓存</div></div>
+          <div class="tl done"><div class="tl-title">模型审查</div><div class="tl-sub">deepseek-chat · review-mode · 结构化输出</div></div>
+          <div class="tl done"><div class="tl-title">回写评论</div><div class="tl-sub">6 条评论已生成 · 1 条已写入 PR 评论</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section class="cta">
+    <div class="wrap">
+      <div class="cta-card" data-reveal>
+        <span class="cta-brand" style="display:block; width:52px;height:52px;border-radius:14px;background:radial-gradient(circle at 30% 30%,var(--amber),#b97a1f);display:grid;place-items:center;margin:0 auto 24px;font-family:var(--font-mono);font-weight:700;color:var(--text-on-amber)">RF</span>
+        <h2>开始锻造更高质量的代码</h2>
+        <p>连接你的 GitHub 或 Gitee 账号，AI 会从第一条 PR 开始为你把关。</p>
+        <div class="hero-actions">
+          <a class="btn btn-amber btn-lg" href="login.html">使用 GitHub 登录</a>
+          <a class="btn btn-outline btn-lg" href="login.html">使用 Gitee 登录</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2026 ReviewForge · 为认真写代码的开发者打造</span>
+    <span><a href="#" style="color:var(--text-2)">文档</a> · <a href="#" style="color:var(--text-2)">隐私</a> · <a href="#" style="color:var(--text-2)">服务条款</a></span>
+  </div>
+</footer>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script>
+  // 生成热力图
+  (function () {
+    var grid = document.getElementById('hm');
+    if (!grid) return;
+    var cols = 52, rows = 7;
+    var seed = ['l0','l0','l0','l0','l1','l1','l2','l2','l3','l4'];
+    for (var c = 0; c < cols; c++) {
+      for (var r = 0; r < rows; r++) {
+        var s = document.createElement('span');
+        var l = seed[(Math.random() * seed.length) | 0];
+        s.className = 'hm'; s.setAttribute('data-l', l.replace('l',''));
+        grid.appendChild(s);
+      }
+    }
+  })();
+</script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

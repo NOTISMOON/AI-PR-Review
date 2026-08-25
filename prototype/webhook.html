@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webhook — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .endpoint-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .we-card { }
+  .we-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .we-brand { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; flex-shrink:0; }
+  .we-brand.gh { background:rgba(255,255,255,.08); color:#fff; }
+  .we-brand.gi { background:rgba(199,29,35,.14); color:#c71d23; }
+  .we-brand svg { width:22px; height:22px; }
+  .we-title { font-family:var(--font-display); font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .we-row { display:flex; align-items:center; gap:8px; padding:9px 12px; background:var(--ink-950); border:1px solid var(--line); border-radius:var(--r-s); margin-top:8px; font-family:var(--font-mono); font-size:12px; }
+  .we-row .lbl { color:var(--text-3); flex-shrink:0; font-family:var(--font-body); font-size:12px; font-weight:600; width:52px; }
+  .we-row .val { color:var(--text-1); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .we-row .copy {
+    flex-shrink:0; width:26px; height:26px; border-radius:6px; border:1px solid var(--line);
+    display:grid; place-items:center; background:transparent; color:var(--text-2); cursor:pointer;
+  }
+  .we-row .copy:hover { color:var(--amber); border-color:var(--amber-glow); background:var(--amber-soft); }
+  .we-row .copy svg { width:14px; height:14px; }
+  .we-foot { display:flex; align-items:center; gap:10px; margin-top:14px; }
+
+  .evt-list { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 16px; }
+  .evt { display:flex; align-items:center; gap:10px; padding:9px 4px; color:var(--text-2); font-size:13.5px; }
+  .evt code { font-family:var(--font-mono); font-size:12px; color:var(--cyan); }
+  .evt .cnt { margin-left:auto; color:var(--text-3); font-size:11.5px; font-family:var(--font-mono); }
+
+  .switch { position:relative; display:inline-flex; width:40px; height:22px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .switch .tr {
+    position:absolute; inset:0; background:var(--ink-800); border:1px solid var(--line-strong);
+    border-radius:999px; transition:all .2s var(--ease); cursor:pointer;
+  }
+  .switch .tr::before {
+    content:''; position:absolute; width:16px; height:16px; border-radius:50%; left:2px; top:2px;
+    background:var(--text-3); transition:all .2s var(--ease);
+  }
+  .switch input:checked + .tr { background:var(--amber); border-color:var(--amber); }
+  .switch input:checked + .tr::before { transform:translateX(18px); background:var(--text-on-amber); }
+  .switch input:focus-visible + .tr { outline:2px solid var(--amber); outline-offset:2px; }
+
+  @media (max-width:900px){ .endpoint-grid{grid-template-columns:1fr;} .evt-list{grid-template-columns:1fr;} }
+</style>
+</head>
+
+<body data-page="webhook">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        管理<span style="opacity:.5">/</span><b style="color:var(--text-1)">Webhook 端点</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <button class="btn btn-outline btn-sm">测试发送</button>
+        <a class="btn btn-amber btn-sm" href="#">添加端点</a>
+      </div>
+    </header>
+
+    <div class="app-content">
+
+      <div class="page-head-admin">
+        <div>
+          <h1 class="split-title">Webhook<b class="accent">端点</b></h1>
+          <div class="sub">PR 变动经由端点实时推送，自动触发 AI 审查。请将下方 URL 配置到代码平台。</div>
+        </div>
+        <div class="act">
+          <span class="tag tag-green pulse" id="wf-status"><span class="dot"></span>监听中 · GitHub</span>
+        </div>
+      </div>
+
+      <!-- 端点卡片 -->
+      <section class="endpoint-grid" style="margin-bottom:22px">
+
+        <!-- GitHub -->
+        <div class="card card-pad we-card" data-reveal data-plat="github">
+          <div class="we-head">
+            <span class="we-brand gh"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/></svg></span>
+            <div>
+              <div class="we-title">GitHub 端点 <span class="tag tag-green"><span class="dot"></span>活跃</span></div>
+              <div style="color:var(--text-3);font-size:12px;margin-top:1px">已接入 · 12 个仓库</div>
+            </div>
+          </div>
+          <div class="we-row"><span class="lbl">URL</span><span class="val">https://reviewforge.app/api/webhook/github</span><button class="copy" aria-label="复制 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+          <div class="we-row"><span class="lbl">Secret</span><span class="val">sk_live_6f9a••••••3c2d</span><button class="copy" aria-label="复制 Secret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+          <div class="we-foot">
+            <span class="tag tag-amber"><span class="dot"></span>验签通过率 100%</span>
+            <span style="margin-left:auto;color:var(--text-3);font-size:12px">最近触发 · 2 分钟前</span>
+          </div>
+        </div>
+
+        <!-- Gitee -->
+        <div class="card card-pad we-card" data-reveal data-plat="gitee">
+          <div class="we-head">
+            <span class="we-brand gi"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#c71d23"/></svg></span>
+            <div>
+              <div class="we-title">Gitee 端点 <span class="tag tag-amber"><span class="dot"></span>配置中</span></div>
+              <div style="color:var(--text-3);font-size:12px;margin-top:1px">已接入 · 3 个仓库</div>
+            </div>
+          </div>
+          <div class="we-row"><span class="lbl">URL</span><span class="val">https://reviewforge.app/api/webhook/gitee</span><button class="copy" aria-label="复制 URL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+          <div class="we-row"><span class="lbl">Secret</span><span class="val">sk_live_4b81••••••a7e0</span><button class="copy" aria-label="复制 Secret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+          <div class="we-foot">
+            <span class="tag tag-neutral">验签未配置</span>
+            <span style="margin-left:auto;color:var(--text-3);font-size:12px">最近触发 · 1 天前</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- 事件订阅 -->
+      <section class="grid-2" style="margin-bottom:22px">
+        <div class="card card-pad" data-reveal>
+          <span class="card-title">事件订阅</span>
+          <p class="small" style="color:var(--text-3);margin:4px 0 8px">选择触发自动审查的 Webhook 事件。</p>
+          <div class="evt-list">
+            <label class="evt"><code>pull_request</code> 打开 / 同步 <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+            <label class="evt"><code>push</code> 代码提交 <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+            <label class="evt"><code>pull_request_review</code> 审查 <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+            <label class="evt"><code>issue_comment</code> 评论 <label class="switch" style="margin-left:auto"><input type="checkbox"><span class="tr"></span></label></label>
+          </div>
+        </div>
+
+        <div class="card card-pad" data-reveal>
+          <span class="card-title">通知规则</span>
+          <div class="evt-list" style="grid-template-columns:1fr">
+            <label class="evt">仅审查打开与非草稿的 PR <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+            <label class="evt">跳过来自机器人账号的变更 <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+            <label class="evt">变更超过阈值时暂停审查 <label class="switch" style="margin-left:auto"><input type="checkbox"><span class="tr"></span></label></label>
+            <label class="evt">失败重试（最多 3 次，指数退避） <label class="switch" style="margin-left:auto"><input type="checkbox" checked><span class="tr"></span></label></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 最近触发 -->
+      <section>
+        <div class="head-between" style="margin-bottom:14px">
+          <h2 class="card-title" style="font-size:17px">最近触发记录</h2>
+          <span style="color:var(--text-3);font-size:12.5px">保留最近 30 天</span>
+        </div>
+        <div class="card" data-reveal>
+          <table class="tbl">
+            <thead>
+              <tr><th style="width:150px">时间</th><th>来源</th><th>事件</th><th>仓库</th><th>触发</th><th>验签</th><th style="text-align:right">状态</th></tr>
+            </thead>
+            <tbody id="wf-log">
+              <tr data-src="github">
+                <td class="time-cell">2 分钟前</td><td class="repo-cell" style="font-family:var(--font-mono);font-size:12px">github</td>
+                <td><code style="color:var(--cyan)">pull_request</code></td><td class="repo-cell">ai-pr-review #128</td>
+                <td class="dur">8.2s</td><td><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>通过</span></td>
+                <td style="text-align:right"><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>200</span></td>
+              </tr>
+              <tr data-src="gitee">
+                <td class="time-cell">1 小时前</td><td class="repo-cell" style="font-family:var(--font-mono);font-size:12px">gitee</td>
+                <td><code style="color:var(--cyan)">push</code></td><td class="repo-cell">gitee-mirror main</td>
+                <td class="dur">—</td><td><span class="tag tag-amber" style="font-size:11px">未验签</span></td>
+                <td style="text-align:right"><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>200</span></td>
+              </tr>
+              <tr data-src="github">
+                <td class="time-cell">昨天 22:14</td><td class="repo-cell" style="font-family:var(--font-mono);font-size:12px">github</td>
+                <td><code style="color:var(--cyan)">pull_request</code></td><td class="repo-cell">ai-pr-review #127</td>
+                <td class="dur">11.4s</td><td><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>通过</span></td>
+                <td style="text-align:right"><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>200</span></td>
+              </tr>
+              <tr data-src="github">
+                <td class="time-cell">昨天 20:02</td><td class="repo-cell" style="font-family:var(--font-mono);font-size:12px">github</td>
+                <td><code style="color:var(--cyan)">pull_request</code></td><td class="repo-cell">ai-pr-review #126</td>
+                <td class="dur">9.1s</td><td><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>通过</span></td>
+                <td style="text-align:right"><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>200</span></td>
+              </tr>
+              <tr data-src="github">
+                <td class="time-cell">3 天前</td><td class="repo-cell" style="font-family:var(--font-mono);font-size:12px">github</td>
+                <td><code style="color:var(--cyan)">push</code></td><td class="repo-cell">ai-pr-review main</td>
+                <td class="dur">—</td><td><span class="tag tag-green" style="font-size:11px"><span class="dot"></span>通过</span></td>
+                <td style="text-align:right"><span class="tag tag-red" style="font-size:11px">500</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  // 按当前登录平台展示：只显示该平台的端点卡与其触发记录
+  (function () {
+    var plat = window.RF_PLATFORM || 'github';
+    if (plat !== 'github' && plat !== 'gitee') plat = 'github';
+    var PNAME = plat === 'gitee' ? 'Gitee' : 'GitHub';
+
+    var st = document.getElementById('wf-status');
+    if (st) st.innerHTML = '<span class="dot"></span> 监听中 · 仅 ' + PNAME + ' 平台';
+
+    /* 端点卡：仅显示当前平台（单列全宽） */
+    var cards = document.querySelectorAll('.we-card');
+    var visible = 0;
+    cards.forEach(function (c) {
+      if (c.getAttribute('data-plat') === plat) { c.style.display = ''; visible++; }
+      else c.style.display = 'none';
+    });
+    var grid = document.querySelector('.endpoint-grid');
+    if (grid && visible === 1) grid.style.gridTemplateColumns = '1fr';
+
+    /* 触发记录：仅保留当前平台来源 */
+    document.querySelectorAll('#wf-log tr').forEach(function (r) {
+      var src = r.getAttribute('data-src');
+      r.style.display = (src === plat) ? '' : 'none';
+    });
+  })();
+
+  // 复制按钮：演示中提示已复制
+  document.querySelectorAll('.we-row .copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var old = b.innerHTML;
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5"/></svg>';
+      setTimeout(function () { b.innerHTML = old; }, 1400);
+    });
+  });
+</script>
+</body>
+</html>

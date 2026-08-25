@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全局设置 — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .use-head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .use-head .ico { width:36px; height:36px; border-radius:9px; display:grid; place-items:center; background:var(--amber-soft); color:var(--amber); flex-shrink:0; }
+  .use-head .ico svg { width:18px; height:18px; }
+  .use-head h3 { font-family:var(--font-display); font-weight:600; font-size:15.5px; }
+  .use-head .hint { color:var(--text-3); font-size:12.5px; }
+  .use-head .save { margin-left:auto; }
+
+  .frow { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .frow:last-child { border-bottom:none; }
+  .frow .flbl { flex:1; min-width:0; }
+  .frow .flbl .t { font-size:13.5px; font-weight:600; }
+  .frow .flbl .d { color:var(--text-3); font-size:12.5px; margin-top:2px; }
+  .frow .fctl { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+
+  .sel {
+    appearance:none; background:var(--ink-850) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236f7276' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border:1px solid var(--line); border-radius:var(--r-s); color:var(--text-1);
+    padding:8px 30px 8px 12px; font-size:13px; cursor:pointer;
+  }
+  .sel:focus { outline:none; border-color:var(--amber); box-shadow:var(--ring); }
+  .num-in { width:90px; background:var(--ink-850); border:1px solid var(--line); border-radius:var(--r-s); color:var(--text-1); padding:8px 12px; font-size:13px; text-align:right; }
+  .num-in:focus { outline:none; border-color:var(--amber); box-shadow:var(--ring); }
+
+  .range-row { display:flex; align-items:center; gap:14px; }
+  input[type="range"] { -webkit-appearance:none; width:180px; height:4px; border-radius:2px; background:var(--ink-800); outline:none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--amber); cursor:pointer; box-shadow:0 0 0 4px var(--amber-soft); }
+  .range-row .val { font-family:var(--font-mono); font-size:12.5px; color:var(--amber); width:34px; }
+
+  .switch { position:relative; display:inline-flex; width:40px; height:22px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .switch .tr { position:absolute; inset:0; background:var(--ink-800); border:1px solid var(--line-strong); border-radius:999px; transition:all .2s var(--ease); cursor:pointer; }
+  .switch .tr::before { content:''; position:absolute; width:16px; height:16px; border-radius:50%; left:2px; top:2px; background:var(--text-3); transition:all .2s var(--ease); }
+  .switch input:checked + .tr { background:var(--amber); border-color:var(--amber); }
+  .switch input:checked + .tr::before { transform:translateX(18px); background:var(--text-on-amber); }
+  .switch input:focus-visible + .tr { outline:2px solid var(--amber); outline-offset:2px; }
+
+  .repo-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .repo-row:last-child { border-bottom:none; }
+  .repo-row .name { font-weight:600; font-size:13.5px; }
+  .repo-row .owner { color:var(--text-3); font-size:12px; font-family:var(--font-mono); }
+  .repo-row .right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+
+  .acct-row { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .acct-row:last-child { border-bottom:none; }
+  .acct-ico { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; flex-shrink:0; }
+  .acct-ico.gh { background:rgba(255,255,255,.08); color:#fff; }
+  .acct-ico.gi { background:rgba(199,29,35,.14); color:#c71d23; }
+  .acct-ico svg { width:22px; height:22px; }
+  .acct-row .who { font-weight:600; font-size:14px; }
+  .acct-row .sub { color:var(--text-3); font-size:12px; }
+  .acct-row .btns { margin-left:auto; display:flex; gap:10px; }
+  .link-btn { color:var(--amber); font-size:12.5px; font-weight:600; cursor:pointer; background:none; border:none; padding:4px; }
+  .link-btn:hover { text-decoration:underline; }
+
+  @media (max-width:760px){ .frow{flex-direction:column;align-items:flex-start;} }
+</style>
+</head>
+
+<body data-page="settings">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        管理<span style="opacity:.5">/</span><b style="color:var(--text-1)">全局设置</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <a class="btn btn-amber btn-sm" href="#">保存更改</a>
+      </div>
+    </header>
+
+    <div class="app-content">
+
+      <div class="page-head-admin">
+        <div>
+          <h1 class="split-title">全局<b class="accent">设置</b></h1>
+          <div class="sub">管理 AI 审查模型、规则、已接入仓库与连接的账号。</div>
+        </div>
+        <div class="act">
+          <span class="tag tag-green"><span class="dot"></span>所有更改已保存</span>
+        </div>
+      </div>
+
+      <!-- AI 审查 -->
+      <section class="card card-pad" data-reveal style="margin-bottom:20px">
+        <div class="use-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 3.6 5.7 5 5 0 0 1 1.6 9 5 5 0 0 1-10.4 0 5 5 0 0 1 1.6-9A4 4 0 0 1 12 2z"/></svg></span>
+          <div><h3>AI 审查</h3><div class="hint">审查所用的模型与输出偏好</div></div>
+          <span class="save tag tag-amber">DeepSeek</span>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">审查模型</div><div class="d">用于生成结构化审查评论的路由模型</div></div>
+          <div class="fctl"><select class="sel" aria-label="选择模型"><option>deepseek-reasoner</option><option>deepseek-chat</option><option>gpt-4o</option><option>claude-sonnet</option></select></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">创作温度</div><div class="d">控制评论的随机性与创造力</div></div>
+          <div class="fctl range-row"><input type="range" min="0" max="1" step="0.1" value="0.2" aria-label="温度"><span class="val">0.2</span></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">单次最大评论数</div><div class="d">每次审查最多回写的评论条数</div></div>
+          <div class="fctl"><input class="num-in" type="number" value="20" min="1" max="100" aria-label="最大评论数"></div>
+        </div>
+      </section>
+
+      <!-- 审查规则 -->
+      <section class="card card-pad" data-reveal style="margin-bottom:20px">
+        <div class="use-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          <div><h3>审查规则</h3><div class="hint">决定评论如何生成与回写</div></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">自动回写评论</div><div class="d">审查完成后自动向 PR 提交评论</div></div>
+          <div class="fctl"><label class="switch"><input type="checkbox" checked><span class="tr"></span></label></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">设置提交状态</div><div class="d">将审查结果写入 PR 的提交状态检查</div></div>
+          <div class="fctl"><label class="switch"><input type="checkbox" checked><span class="tr"></span></label></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">风险阈值</div><div class="d">判定为“严重”所需的最少命中数</div></div>
+          <div class="fctl"><div class="seg"><button class="active">宽松</button><button>默认</button><button>严格</button></div></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">仅审查变更行</div><div class="d">只对 diff 中新增/修改的行生成评论</div></div>
+          <div class="fctl"><label class="switch"><input type="checkbox" checked><span class="tr"></span></label></div>
+        </div>
+        <div class="frow">
+          <div class="flbl"><div class="t">忽略 WIP / 草稿</div><div class="d">跳过标题含 WIP 或处于草稿状态的 PR</div></div>
+          <div class="fctl"><label class="switch"><input type="checkbox"><span class="tr"></span></label></div>
+        </div>
+      </section>
+
+      <!-- 已接入仓库 -->
+      <section class="card card-pad" data-reveal style="margin-bottom:20px">
+        <div class="use-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+          <div><h3>已接入仓库</h3><div class="hint">开启自动审查的代码仓库</div></div>
+          <a class="btn btn-outline btn-sm save" href="repo.html">管理</a>
+        </div>
+        <div class="repo-row">
+          <span class="lang-dot lang-ts"></span>
+          <div><div class="name">ai-pr-review</div><div class="owner">nicepkg · GitHub</div></div>
+          <div class="right"><span class="tag tag-green"><span class="dot"></span>审查中</span><label class="switch"><input type="checkbox" checked><span class="tr"></span></label></div>
+        </div>
+        <div class="repo-row">
+          <span class="lang-dot lang-ts"></span>
+          <div><div class="name">nextjs-blog</div><div class="owner">nicepkg · GitHub</div></div>
+          <div class="right"><span class="tag tag-green"><span class="dot"></span>已开启</span><label class="switch"><input type="checkbox" checked><span class="tr"></span></label></div>
+        </div>
+        <div class="repo-row">
+          <span class="lang-dot lang-py"></span>
+          <div><div class="name">ml-toolkit</div><div class="owner">nicepkg · Gitee</div></div>
+          <div class="right"><span class="tag tag-neutral">未开启</span><label class="switch"><input type="checkbox"><span class="tr"></span></label></div>
+        </div>
+      </section>
+
+      <!-- 账号与连接 -->
+      <section class="card card-pad" data-reveal>
+        <div class="use-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></span>
+          <div><h3>账号与连接</h3><div class="hint">管理已授权的代码平台账号</div></div>
+        </div>
+        <div class="acct-row">
+          <span class="acct-ico gh"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/></svg></span>
+          <div><div class="who">octocat</div><div class="sub">GitHub · 只读代码 + 提交 review</div></div>
+          <div class="btns"><button class="link-btn">管理权限</button><button class="link-btn">断开</button></div>
+        </div>
+        <div class="acct-row">
+          <span class="acct-ico gi"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#c71d23"/></svg></span>
+          <div><div class="who">octocat</div><div class="sub">Gitee (gitee.com/octocat)</div></div>
+          <div class="btns"><button class="link-btn">管理权限</button><button class="link-btn">断开</button></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  // 温度滑块数值回显
+  document.querySelectorAll('input[type="range"]').forEach(function (r) {
+    var out = r.parentElement.querySelector('.val');
+    if (out) {
+      out.textContent = r.value;
+      r.addEventListener('input', function () { out.textContent = r.value; });
+    }
+  });
+  // 切换 segment
+  document.querySelectorAll('.seg').forEach(function (seg) {
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>控制台 — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .usercard { display:flex; align-items:center; gap:16px; }
+  .usercard .avatar { width:52px; height:52px; }
+  .usercard h2 { font-family:var(--font-display); font-size:22px; font-weight:600; letter-spacing:-0.02em; }
+  .usercard .handle { font-family:var(--font-mono); color:var(--amber); font-size:13px; margin-top:2px; }
+  .usercard .meta { color:var(--text-3); font-size:12px; margin-top:5px; display:flex; gap:10px; flex-wrap:wrap; }
+
+  .kpi-card { padding:20px; }
+  .kpi { position:relative; }
+  .kpi .k { width:42px; height:42px; border-radius:10px; display:grid; place-items:center; background:var(--amber-soft); color:var(--amber); margin-bottom:14px; }
+
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .chips button { border:1px solid var(--line); background:var(--ink-850); color:var(--text-3); padding:6px 12px; font-family:var(--font-body); }
+  .chips button.active { background:var(--amber-soft); border-color:rgba(232,163,61,.35); color:var(--amber); }
+  .bar { display:flex; height:8px; border-radius:4px; overflow:hidden; gap:2px; margin:18px 0 14px; }
+  .bar i { border-radius:2px; transform-origin:left; }
+
+  .pr-row { display:flex; align-items:center; gap:12px; padding:13px 4px; border-bottom:1px dashed var(--line); }
+  .pr-row:last-child { border-bottom:none; }
+  .pr-state { width:8px; height:24px; border-radius:4px; flex-shrink:0; }
+  .pr-row .t { font-weight:600; font-size:13.5px; }
+  .pr-row .m { color:var(--text-3); font-size:12px; font-family:var(--font-mono); }
+  .pr-row .tag { margin-left:auto; }
+</style>
+</head>
+
+<body data-page="dashboard">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        工作台<span style="opacity:.5">/</span><b style="color:var(--text-1)">控制台</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <a class="btn btn-amber btn-sm" href="review.html">新建审查</a>
+        <button class="icon-btn" aria-label="通知"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
+      </div>
+    </header>
+
+    <div class="app-content">
+      <div class="page-head-admin">
+        <div>
+          <h1 class="split-title">开发者 <b class="accent">全景</b> 洞察</h1>
+          <div class="sub" id="dash-sub">仅查看你当前平台的提交、仓库与待审 PR，数据相互独立。</div>
+        </div>
+        <div class="act">
+          <span class="tag tag-amber" id="plat-tag"><span class="dot"></span>GitHub 视角</span>
+          <a class="btn btn-outline btn-sm" href="repos.html" id="manage-repos">管理仓库</a>
+        </div>
+      </div>
+
+      <!-- 用户卡片 -->
+      <section class="card card-pad" data-reveal style="margin-bottom:22px">
+        <div class="usercard">
+          <span class="avatar" id="u-avatar"><img src="https://avatars.githubusercontent.com/u/583231?v=4" alt="用户头像" width="52" height="52"></span>
+          <div>
+            <h2 id="u-name">octocat</h2>
+            <div class="handle" id="u-handle">@octocat · 已授权 GitHub</div>
+            <div class="meta" id="u-meta"><span>成员来自 1 个平台</span><span>·</span><span>连续提交 21 天</span><span>·</span><span>本月 +182</span></div>
+          </div>
+          <div style="margin-left:auto"><span class="tag tag-green"><span class="dot"></span>在线</span></div>
+        </div>
+      </section>
+
+      <!-- KPI -->
+      <section class="grid-4">
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div class="stat-num mono" id="k-commits"><span>0</span></div><div class="stat-label">年内提交</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><div class="stat-num mono" id="k-repos"><span>0</span></div><div class="stat-label">仓库数</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 3 5 5-5 5"/><path d="M21 8H9a4 4 0 0 0-4 4v9"/></svg></span><div class="stat-num mono" id="k-prs"><span>0</span></div><div class="stat-label">待审 PR</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></span><div class="stat-num mono" id="k-rate"><span>0</span></div><div class="stat-label">问题检出率</div></div></div>
+      </section>
+
+      <!-- 热力图 + 语言 -->
+      <section class="grid-2 section-gap">
+        <div class="card card-pad hx-card">
+          <div class="head-between" style="margin-bottom:14px">
+            <span class="card-title">提交活跃度</span>
+            <div class="hm-legend">少 <span style="width:11px;height:11px;background:var(--ink-800);border-radius:3px;display:inline-block"></span><span style="width:11px;height:11px;background:rgba(232,163,61,.5);border-radius:3px;display:inline-block"></span><span style="width:11px;height:11px;background:var(--amber);border-radius:3px;display:inline-block"></span> 多</div>
+          </div>
+          <div class="chips"><button class="active">一年</button><button>半年</button><button>30 天</button></div>
+          <div class="heatmap-grid" id="hm" aria-label="全年提交热力图"></div>
+          <div class="small" id="activity-peak" style="margin-top:12px;color:var(--text-3)">◆ 活跃峰值 8 月 · 最佳仓库 ai-pr-review</div>
+        </div>
+
+        <div class="card card-pad hx-card">
+          <span class="card-title">语言占比</span>
+          <div class="bar" id="langbar" aria-hidden="true"></div>
+          <div class="grid-2" id="langlist"></div>
+        </div>
+      </section>
+
+      <!-- 仓库 -->
+      <section class="section-gap">
+        <div class="head-between" style="margin-bottom:16px">
+          <h2 class="card-title" style="font-size:17px">最近的仓库</h2>
+          <a class="btn btn-outline btn-sm" href="repos.html">全部仓库</a>
+        </div>
+        <div class="grid-3" id="repos-grid" data-reveal></div>
+      </section>
+
+      <!-- 待审 PR -->
+      <section class="section-gap">
+        <div class="head-between" style="margin-bottom:8px">
+          <h2 class="card-title" style="font-size:17px">待审查 PR</h2>
+          <a class="btn btn-outline btn-sm" href="review.html">进入审查</a>
+        </div>
+        <div class="card card-pad" data-reveal id="prs-card"></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script>
+  (function () {
+    /* ---------- 平台独立数据 ---------- */
+    var PLATFORMS = {
+      github: {
+        name: 'GitHub', user: 'octocat', handle: '@octocat · 已授权 GitHub', avatar: 'https://avatars.githubusercontent.com/u/583231?v=4',
+        meta: '<span>成员来自 1 个平台</span><span>·</span><span>连续提交 21 天</span><span>·</span><span>本月 +182</span>',
+        sub: '仅查看你的 GitHub 提交、仓库与待审 PR，数据相互独立。',
+        commits: 1248, repos: 19, prs: 12, rate: 96, rateSuffix: '%',
+        activityPeak: '8 月 · 最佳仓库 ai-pr-review',
+        langBar: [
+          { w: 52, c: 'var(--cyan)' }, { w: 24, c: 'var(--amber)' },
+          { w: 14, c: '#46d1e8' }, { w: 10, c: 'var(--violet)' }
+        ],
+        langList: [ { d: 'ts', n: 'TypeScript', v: '52%' }, { d: 'js', n: 'JavaScript', v: '24%' }, { d: 'go', n: 'Go', v: '14%' }, { d: 'py', n: 'Python', v: '10%' } ],
+        repos: [
+          { name: 'ai-pr-<b>review</b>', owner: 'nicepkg ▶ GitHub', tag: '审查中', tagCls: 'tag-amber', desc: 'AI 代码审查平台核心仓库，Webhook 自动审查与多模型路由。', lan: 'ts', lanl: 'TypeScript', stars: 128, prs: 3 },
+          { name: 'nextjs-<b>blog</b>', owner: 'nicepkg ▶ GitHub', tag: '已开启', tagCls: 'tag-green', desc: 'Next.js 14 + MDX 博客主题，SSR 与静态渲染示例。', lan: 'ts', lanl: 'TypeScript', stars: 56, prs: 0 },
+          { name: 'rust-<b>parser</b>', owner: 'nicepkg ▶ GitHub', tag: '审查中', tagCls: 'tag-amber', desc: '用 rust 编写的轻量异步 diff 解析库。', lan: 'rust', lanl: 'Rust', stars: 89, prs: 1 }
+        ],
+        prs: [
+          { c: 'var(--red)', t: 'fix(handler): guard against missing upload file', m: 'ai-pr-review #128 · +84 −21', l: '2 风险', lc: 'tag-red' },
+          { c: 'var(--amber)', t: 'feat: cache context snapshots to fuzzy hits', m: 'ai-pr-review #127 · +320 −12', l: '3 建议', lc: 'tag-amber' },
+          { c: 'var(--cyan)', t: 'refactor: migrate dashboard to new design', m: 'ai-pr-review #126 · +115 −89', l: '排队中', lc: 'tag-neutral' }
+        ]
+      },
+      gitee: {
+        name: 'Gitee', user: 'nicepkg', handle: '@nicepkg · 已授权 Gitee', avatar: 'https://www.gitee.com/assets/new_portal/logo/first/index_white.svg',
+        meta: '<span>成员来自 1 个平台</span><span>·</span><span>连续提交 9 天</span><span>·</span><span>本月 +64</span>',
+        sub: '仅查看你的 Gitee 提交、仓库与待审 PR，数据相互独立。',
+        commits: 402, repos: 4, prs: 5, rate: 88, rateSuffix: '%',
+        activityPeak: '7 月 · 最佳仓库 go-gateway',
+        langBar: [
+          { w: 46, c: '#46d1e8' }, { w: 28, c: 'var(--violet)' },
+          { w: 16, c: 'var(--amber)' }, { w: 10, c: 'var(--green)' }
+        ],
+        langList: [ { d: 'go', n: 'Go', v: '46%' }, { d: 'py', n: 'Python', v: '28%' }, { d: 'js', n: 'JavaScript', v: '16%' }, { d: 'other', n: '其他', v: '10%' } ],
+        repos: [
+          { name: 'go-<b>gateway</b>', owner: 'nicepkg ▶ Gitee', tag: '审查中', tagCls: 'tag-amber', desc: '基于 Go 的 API 网关，内置限流与鉴权中间件。', lan: 'go', lanl: 'Go', stars: 67, prs: 1 },
+          { name: 'ml-<b>toolkit</b>', owner: 'nicepkg ▶ Gitee', tag: '未开启', tagCls: 'tag-neutral', desc: '数据预处理与模型评估的机器学习工具集。', lan: 'py', lanl: 'Python', stars: 42, prs: 0 },
+          { name: 'data-<b>pipeline</b>', owner: 'nicepkg ▶ Gitee', tag: '已开启', tagCls: 'tag-green', desc: 'ETL 数据管道与调度平台，支持定时任务。', lan: 'py', lanl: 'Python', stars: 38, prs: 2 }
+        ],
+        prs: [
+          { c: 'var(--red)', t: 'feat: add gitee webhook receiver', m: 'go-gateway #24 · +72 −6', l: '2 风险', lc: 'tag-red' },
+          { c: 'var(--amber)', t: 'fix: rate-limit model router retries', m: 'go-gateway #23 · +31 −18', l: '3 建议', lc: 'tag-amber' },
+          { c: 'var(--cyan)', t: 'docs: update README for v2', m: 'ml-toolkit #22 · +58 −12', l: '排队中', lc: 'tag-neutral' }
+        ]
+      }
+    };
+
+    var provider = 'github';
+    var q = location.search;
+    var m = q.match(/[?&]provider=([a-z]+)/);
+    if (m && PLATFORMS[m[1]]) provider = m[1];
+    else if (window.RF_PLATFORM) provider = window.RF_PLATFORM;
+    try { localStorage.setItem('rf_platform', provider); } catch (e) {}
+    var P = PLATFORMS[provider];
+
+    function txt(id, s) { var el = document.getElementById(id); if (el) el.innerHTML = s; }
+    function count(id, target, suffix) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('data-count', target);
+      if (suffix) el.setAttribute('data-suffix', suffix);
+      if (typeof window.gsap === 'undefined') el.textContent = target.toLocaleString() + (suffix || '');
+    }
+
+    /* 平台化渲染 */
+    document.getElementById('dash-sub').innerHTML = P.sub;
+    document.getElementById('plat-tag').innerHTML = '<span class="dot"></span>' + P.name + ' 视角 · 数据独立';
+    count('k-commits', P.commits); count('k-repos', P.repos); count('k-prs', P.prs); count('k-rate', P.rate, P.rateSuffix);
+    document.getElementById('u-name').textContent = P.user;
+    document.getElementById('u-handle').textContent = P.handle;
+    document.getElementById('u-meta').innerHTML = P.meta;
+    document.getElementById('u-avatar').querySelector('img').src = P.avatar;
+    document.getElementById('activity-peak').innerHTML = '◆ 活跃峰值 ' + P.activityPeak;
+
+    /* 语言占比 */
+    var bar = document.getElementById('langbar');
+    bar.innerHTML = P.langBar.map(function (b) { return '<i style="width:' + b.w + '%;background:' + b.c + '"></i>'; }).join('');
+    document.getElementById('langlist').innerHTML = P.langList.map(function (l) {
+      var dc = l.d === 'go' ? 'lang-go' : l.d === 'py' ? 'lang-py' : l.d === 'js' ? 'lang-js' : 'lang-ts';
+      if (l.d === 'other') dc = 'lang-ts';
+      return '<div class="feat" style="padding:8px 0"><span class="lang-dot ' + dc + '"></span><div><h4>' + l.n + '</h4><p class="muted">' + l.v + '</p></div></div>';
+    }).join('');
+
+    /* 仓库卡片 */
+    document.getElementById('repos-grid').innerHTML = P.repos.map(function (r) {
+      var dc = r.lan === 'rust' ? 'lang-rust' : r.lan === 'go' ? 'lang-go' : r.lan === 'py' ? 'lang-py' : 'lang-ts';
+      return '<a class="card repo-card tilt" style="padding:20px" href="repo.html"><div class="tilt-inner"><div class="top"><div><div class="repo-name">' + r.name + '</div><div class="repo-owner">' + r.owner + '</div></div><span class="tag ' + r.tagCls + '"><span class="dot"></span>' + r.tag + '</span></div><p class="repo-desc">' + r.desc + '</p><div class="repo-foot"><span class="it"><span class="lang-dot ' + dc + '"></span>' + r.lanl + '</span><span class="it">★ ' + r.stars + '</span><span class="it">' + r.prs + ' 待审 PR</span></div></div></a>';
+    }).join('');
+
+    /* 待审 PR */
+    document.getElementById('prs-card').innerHTML = P.prs.map(function (p) {
+      return '<a href="review.html" class="pr-row"><span class="pr-state" style="background:' + p.c + '"></span><div><div class="t">' + p.t + '</div><div class="m">' + p.m + '</div></div><span class="tag ' + p.lc + '">' + p.l + '</span></a>';
+    }).join('');
+
+    /* 热力图随机生成（占位，与平台无关） */
+    var grid = document.getElementById('hm');
+    if (grid) {
+      var seed = ['0','0','0','0','1','1','2','2','3','4'];
+      for (var c = 0; c < 52; c++) for (var r = 0; r < 7; r++) {
+        var s = document.createElement('span');
+        s.className = 'hm';
+        s.setAttribute('data-l', seed[(Math.random()*seed.length)|0]);
+        grid.appendChild(s);
+      }
+      if (typeof window.gsap !== 'undefined') {
+        gsap.fromTo(grid.children, { scale: 0, opacity: 0 }, {
+          scale: 1, opacity: 1, duration: 0.35, stagger: { each: 0.004 },
+          ease: 'back.out(2)', delay: 0.35, clearProps: 'all'
+        });
+      }
+    }
+    if (bar && typeof window.gsap !== 'undefined') {
+      gsap.from('#langbar i', { scaleX: 0, transformOrigin: 'left', duration: 1.1, stagger: 0.1, ease: 'power3.out', delay: 0.3, clearProps: 'all' });
+    }
+  })();
+</script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>审查历史 — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .filter-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .filter-bar .search-in {
+    flex:1; min-width:200px; position:relative;
+  }
+  .filter-bar .search-in svg { position:absolute; left:11px; top:10px; width:16px;height:16px;color:var(--text-3); }
+  .filter-bar .search-in input {
+    width:100%; height:38px; background:var(--ink-850); border:1px solid var(--line);
+    border-radius:var(--r-s); padding:0 12px 0 34px; color:var(--text-1); font-size:13px;
+  }
+  .filter-bar .search-in input:focus { outline:none; border-color:var(--amber); box-shadow:var(--ring); }
+  .tbl .pr-title { font-weight:600; }
+  .tbl .pr-title a { color:var(--text-1); }
+  .tbl .pr-title a:hover { color:var(--amber); }
+  .tbl .repo-cell { color:var(--text-3); font-family:var(--font-mono); font-size:12px; }
+  .tbl .time-cell { color:var(--text-3); font-size:12px; white-space:nowrap; }
+  .tbl .dur { font-family:var(--font-mono); color:var(--text-2); font-size:12px; }
+  .sev { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono); font-size:12px; }
+  .sev b { font-weight:600; }
+  .sev.red b{color:var(--red)} .sev.amber b{color:var(--amber)} .sev.green b{color:var(--green)}
+</style>
+</head>
+
+<body data-page="history">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        审查<span style="opacity:.5">/</span><b style="color:var(--text-1)">审查历史</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <a class="btn btn-outline btn-sm" href="#">导出 CSV</a>
+        <a class="btn btn-amber btn-sm" href="review.html">查看待审 PR</a>
+      </div>
+    </header>
+
+    <div class="app-content">
+
+      <div class="page-head-admin">
+        <div>
+          <h1 class="split-title">审查<b class="accent">历史</b></h1>
+          <div class="sub">已完成的 AI PR 审查记录，包含采纳情况与耗时统计。</div>
+        </div>
+        <div class="act">
+          <span class="status-pill"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span> 已回写 36 · 运行正常</span>
+        </div>
+      </div>
+
+      <!-- KPI 摘要 -->
+      <section class="grid-4" style="margin-bottom:22px">
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M8 16h5"/></svg></span><div class="stat-num mono" data-count="128"><span>0</span></div><div class="stat-label">累计审查</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 9.4 8 10 4.6-.6 8-5 8-10V6z"/></svg></span><div class="stat-num mono" data-count="92" data-suffix="%"><span>0</span></div><div class="stat-label">评论采纳率</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div class="stat-num mono" data-count="8"><span>0</span><span class="unit">.2s</span></div><div class="stat-label">平均审查耗时</div></div></div>
+        <div class="card card-pad kpi-card"><div class="kpi"><span class="k"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 9 9-9 9"/><path d="M21 12H3"/></svg></span><div class="stat-num mono" data-count="76" data-suffix="%"><span>0</span></div><div class="stat-label">一次通过率</div></div></div>
+      </section>
+
+      <!-- 筛选 -->
+      <div class="filter-bar" data-reveal>
+        <div class="seg">
+          <button class="active">全部</button>
+          <button>有风险</button>
+          <button>仅建议</button>
+          <button>已回写</button>
+        </div>
+        <div class="search-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+          <input type="search" placeholder="搜索 PR / 仓库…" aria-label="搜索审查记录">
+        </div>
+      </div>
+
+      <!-- 记录表格 -->
+      <div class="card" data-reveal>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width:210px">Pull Request</th>
+              <th>仓库</th>
+              <th>变更</th>
+              <th>风险 / 建议 / 赞同</th>
+              <th>状态</th>
+              <th>耗时</th>
+              <th style="text-align:right">时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">fix(handler): guard against missing upload file</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#128</div></td>
+              <td class="repo-cell">nicepkg/ai-pr-review</td>
+              <td><span class="add" style="color:var(--green)">+18</span> <span style="color:var(--red)">−4</span></td>
+              <td><span class="sev red"><b>2</b>风险</span> <span class="sev amber" style="margin-left:8px"><b>1</b>建议</span> <span class="sev green" style="margin-left:8px"><b>1</b>赞同</span></td>
+              <td><span class="tag tag-green"><span class="dot"></span>已回写</span></td>
+              <td class="dur">8.2s</td>
+              <td class="time-cell" style="text-align:right">2 小时前</td>
+            </tr>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">feat: cache context snapshots to fuzzy hits</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#127</div></td>
+              <td class="repo-cell">nicepkg/ai-pr-review</td>
+              <td><span class="add" style="color:var(--green)">+320</span> <span style="color:var(--red)">−12</span></td>
+              <td><span class="sev red"><b>1</b>风险</span> <span class="sev green" style="margin-left:8px"><b>3</b>赞同</span></td>
+              <td><span class="tag tag-green"><span class="dot"></span>已回写</span></td>
+              <td class="dur">11.4s</td>
+              <td class="time-cell" style="text-align:right">5 小时前</td>
+            </tr>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">refactor: migrate dashboard to new design</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#126</div></td>
+              <td class="repo-cell">nicepkg/ai-pr-review</td>
+              <td><span class="add" style="color:var(--green)">+115</span> <span style="color:var(--red)">−89</span></td>
+              <td><span class="sev amber"><b>3</b>建议</span></td>
+              <td><span class="tag tag-amber"><span class="dot"></span>部分采纳</span></td>
+              <td class="dur">9.1s</td>
+              <td class="time-cell" style="text-align:right">昨天</td>
+            </tr>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">docs: update roadmap for v2</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#125</div></td>
+              <td class="repo-cell">nicepkg/ai-pr-review</td>
+              <td><span class="add" style="color:var(--green)">+240</span></td>
+              <td><span class="sev amber"><b>1</b>建议</span> <span class="sev green" style="margin-left:8px"><b>1</b>赞同</span></td>
+              <td><span class="tag tag-neutral">未回写</span></td>
+              <td class="dur">3.6s</td>
+              <td class="time-cell" style="text-align:right">3 天前</td>
+            </tr>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">feat: add gitee webhook receiver</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#124</div></td>
+              <td class="repo-cell">nicepkg/gitee-mirror</td>
+              <td><span class="add" style="color:var(--green)">+72</span> <span style="color:var(--red)">−6</span></td>
+              <td><span class="sev green"><b>2</b>赞同</span></td>
+              <td><span class="tag tag-green"><span class="dot"></span>已回写</span></td>
+              <td class="dur">5.8s</td>
+              <td class="time-cell" style="text-align:right">5 天前</td>
+            </tr>
+            <tr>
+              <td><div class="pr-title"><a href="review.html">fix: rate-limit model router retries</a></div><div class="mono" style="color:var(--text-3);font-size:12px">#123</div></td>
+              <td class="repo-cell">nicepkg/ai-pr-review</td>
+              <td><span class="add" style="color:var(--green)">+31</span> <span style="color:var(--red)">−18</span></td>
+              <td><span class="sev red"><b>3</b>风险</span> <span class="sev amber" style="margin-left:8px"><b>2</b>建议</span></td>
+              <td><span class="tag tag-green"><span class="dot"></span>已回写</span></td>
+              <td class="dur">10.7s</td>
+              <td class="time-cell" style="text-align:right">6 天前</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-top:1px solid var(--line)">
+          <span style="color:var(--text-3);font-size:12.5px">共 128 条 · 当前显示 1–6</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" disabled>上一页</button>
+            <button class="btn btn-amber btn-sm">下一页</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

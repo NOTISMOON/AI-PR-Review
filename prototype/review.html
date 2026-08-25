@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR #128 · fix(handler) — ReviewForge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  .pr-top h1 { font-family:var(--font-display); font-size:24px; font-weight:600; letter-spacing:-0.02em; line-height:1.15; }
+  .pr-top h1 .num { color:var(--amber); font-family:var(--font-mono); font-size:20px; }
+  .pr-meta { display:flex; gap:22px; color:var(--text-3); font-size:12.5px; margin-top:12px; flex-wrap:wrap; }
+  .pr-meta .m { display:inline-flex; align-items:center; gap:6px; }
+  .pr-meta b { color:var(--text-2); font-weight:600; }
+
+  .layout { display:grid; grid-template-columns:1fr 380px; gap:20px; align-items:start; }
+  .sticky { position:sticky; top:80px; }
+  .files-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .files-chips button { border:1px solid var(--line); background:var(--ink-850); color:var(--text-2); padding:6px 12px; font-size:12.5px; font-family:var(--font-mono); }
+  .files-chips button.active { background:var(--amber-soft); border-color:rgba(232,163,61,.35); color:var(--amber); }
+
+  .rv.done { border-color:var(--line-strong); }
+  .rv.done .rv-actions { opacity:.55; }
+  .sum-bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  .sum-pill { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--r-full); border:1px solid var(--line); background:var(--ink-900); font-size:13px; }
+  .sum-pill b { font-family:var(--font-display); font-size:17px; }
+  .sum-pill.red b{color:var(--red)} .sum-pill.amber b{color:var(--amber)} .sum-pill.green b{color:var(--green)}
+  .your-cmt { margin-top:12px; border-top:1px dashed var(--line); padding-top:12px; }
+  .your-cmt textarea { width:100%; background:var(--ink-950); border:1px solid var(--line); border-radius:var(--r-s); color:var(--text-1); padding:10px 12px; font-size:13px; resize:vertical; min-height:64px; }
+  .your-cmt textarea:focus { outline:none; border-color:var(--amber); box-shadow:var(--ring); }
+
+  @media (max-width:1000px){ .layout{grid-template-columns:1fr;} .sticky{position:static;} }
+</style>
+</head>
+
+<body data-page="review">
+
+<div class="app">
+
+  <!-- 侧边栏：由 assets/js/shell.js 注入 -->
+  <aside class="sidebar" aria-label="侧边导航"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <span style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px">
+        审查<span style="opacity:.5">/</span><b style="color:var(--text-1)">PR #128</b>
+      </span>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <a class="btn btn-amber btn-sm" href="#" id="rerun">重新审查</a>
+        <button class="icon-btn" aria-label="通知"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
+      </div>
+    </header>
+
+    <div class="app-content">
+
+      <nav class="breadcrumb">
+        <a href="dashboard.html">控制台</a><span class="sep">/</span>
+        <a href="repo.html">nicepkg / ai-pr-review</a><span class="sep">/</span>
+        <a href="#">Pull Requests</a><span class="sep">/</span>
+        <span>#128</span>
+      </nav>
+
+      <!-- PR 头部 -->
+      <div class="pr-top" data-reveal>
+        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:280px">
+            <h1><span class="num">#128</span> fix(handler): guard against missing upload file</h1>
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+              <span class="tag tag-red"><span class="dot"></span>2 风险</span>
+              <span class="tag tag-amber"><span class="dot"></span>1 建议</span>
+              <span class="tag tag-green"><span class="dot"></span>1 赞同</span>
+              <span class="tag tag-neutral">reviewer · deepseek-reasoner</span>
+            </div>
+            <div class="pr-meta">
+              <span class="m">提出者 <b>octocat</b></span>
+              <span class="m">分支 <b>fix/upload-guard</b> → <b>main</b></span>
+              <span class="m">变更 <b>2 files · +18 −4</b></span>
+              <span class="m">审查耗时 <b>8.2s</b></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-outline btn-sm">批准</button>
+            <button class="btn btn-amber btn-sm">提交回写评论</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 摘要 -->
+      <div class="card card-pad" data-reveal style="margin-bottom:18px">
+        <span class="card-title">AI 审查摘要</span>
+        <p class="small" style="margin-top:8px;color:var(--text-2);line-height:1.7">
+          该变更引入可选链与大小校验，方向正确。主要风险在于：当 <code style="color:var(--amber);font-family:var(--font-mono)">req.file</code> 缺失时当前的 <code style="color:var(--amber);font-family:var(--font-mono)">?? 0</code> 会静默继续，可能掩盖上传失败；建议改为显式抛出 400。整体无安全问题，审查通过但存在 1 处需确认。
+        </p>
+      </div>
+
+      <!-- 统计条 -->
+      <div class="sum-bar" data-reveal>
+        <span class="sum-pill red"><b>2</b>风险</span>
+        <span class="sum-pill amber"><b>1</b>建议</span>
+        <span class="sum-pill green"><b>1</b>赞同</span>
+        <span class="sum-pill"><span class="spinner"></span> 状态：已回写 PR 评论</span>
+      </div>
+
+      <div class="layout">
+
+        <!-- Diff -->
+        <div>
+          <div class="files-chips">
+            <span class="branch-pill" role="button" tabindex="0" style="border:1px solid var(--line)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6"/><path d="M18 9a3 3 0 0 0-3-3h-3"/><path d="M15 5l-3 1 3 1"/></svg><span>文件</span><b>2</b></span>
+            <button class="active">upload.ts</button>
+            <button>types.ts</button>
+          </div>
+
+          <div class="diff-file" data-reveal id="file-upload">
+            <div class="diff-file-head">
+              <span>📄 src/handlers/upload.ts</span>
+              <span class="diff-stats"><span class="add">+12</span> <span class="del">−1</span></span>
+            </div>
+            <div class="diff-body">
+              <div class="dln ctx"><span class="gutter">@@</span><span class="code" style="color:var(--text-3)"> @@ -29,8 +29,19 @@ export async function upload(req) {</span></div>
+              <div class="dln ctx"><span class="gutter"></span><span class="num">29</span><span class="code">  <span class="tok-kw">export async function</span> <span class="tok-fn">upload</span>(<span class="tok-var">req</span>) {</span></div>
+              <div class="dln ctx"><span class="gutter"></span><span class="num">30</span><span class="code">  <span class="tok-kw">const</span> <span class="tok-var">meta</span> = <span class="tok-var">coinfig</span>.<span class="tok-fn">load</span>();</span></div>
+              <div class="dln del"><span class="gutter">-</span><span class="num">31</span><span class="code"><span class="tok-kw">const</span> <span class="tok-var">size</span> = <span class="tok-var">req</span>.<span class="tok-var">file</span>.<span class="tok-var">size</span>;</span></div>
+              <div class="dln add" id="dln32"><span class="gutter">+</span><span class="num">32</span><span class="code"><span class="tok-kw">const</span> <span class="tok-var">size</span> = <span class="tok-var">req</span>.<span class="tok-var">file</span>?.<span class="tok-var">size</span> ?? <span class="tok-num">0</span>;</span><span class="cmt-flag"></span></div>
+              <div class="dln add" id="dln33"><span class="gutter">+</span><span class="num">33</span><span class="code"><span class="tok-kw">if</span> (<span class="tok-var">size</span> > <span class="tok-num">10</span> * <span class="tok-num">1024</span> * <span class="tok-num">1024</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> <span class="tok-fn">Error</span>(<span class="tok-str">'file too large'</span>);</span><span class="cmt-flag"></span></div>
+              <div class="dln add"><span class="gutter">+</span><span class="num">34</span><span class="code">  <span class="tok-kw">if</span> (!<span class="tok-var">size</span>) <span class="tok-kw">return</span> <span class="tok-fn">res</span>(<span class="tok-num">400</span>, { <span class="tok-var">error</span>: <span class="tok-str">'file required'</span> });</span></div>
+              <div class="dln ctx"><span class="gutter"></span><span class="num">35</span><span class="code">  <span class="tok-cm">// ...stream to storage...</span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 评论轨道 -->
+        <aside class="sticky">
+          <div class="head-between" style="margin-bottom:12px">
+            <span class="card-title">AI 审查评论</span>
+            <button class="btn btn-ghost btn-sm">回复全部</button>
+          </div>
+          <div class="review-rail" id="rail">
+
+            <div class="rv" data-k="concern" data-reveal>
+              <div class="rv-head"><span class="rv-k">Risk</span><span class="tag tag-red rv-sev">严重</span><span class="rv-loc">upload.ts L32</span></div>
+              <div class="rv-body"><strong>可选链兜底可能掩盖上传失败。</strong>当 <code>req.file</code> 为 <code>undefined</code> 时，<code>?? 0</code> 会让流程继续并最终返回 400；但若该函数早期缺少数值判断，会静默处理缺失文件。<div class="rv-code hl-sweep">if (!req.file) throw new HttpError(400, 'file required')</div></div>
+              <div class="rv-actions"><button class="btn btn-amber btn-sm">采纳建议</button><button class="btn btn-ghost btn-sm">忽略</button></div>
+            </div>
+
+            <div class="rv" data-k="suggestion" data-reveal>
+              <div class="rv-head"><span class="rv-k">Suggestion</span><span class="rv-loc">upload.ts L33</span></div>
+              <div class="rv-body">超限阈值建议提取为具名常量 <code>MAX_UPLOAD_BYTES</code>，以便在不同处理器间复用并便于单元测试。<div class="rv-code hl-sweep">const MAX_UPLOAD_BYTES = 10 * 1024 * 1024</div></div>
+              <div class="rv-actions"><button class="btn btn-amber btn-sm">采纳建议</button><button class="btn btn-ghost btn-sm">忽略</button></div>
+            </div>
+
+            <div class="rv" data-k="positive">
+              <div class="rv-head"><span class="rv-k">Positive</span><span class="rv-loc">overview</span></div>
+              <div class="rv-body">将同步的 <code>setLoading</code> 重构为更可测的单测路径，方向正确；新增的边界校验让函数在缺少文件时也能给出明确响应。</div>
+            </div>
+
+            <div class="rv" data-k="positive">
+              <div class="rv-head"><span class="rv-k">Positive</span><span class="rv-loc">overview</span></div>
+              <div class="rv-body">整体变更范围小、意图清晰，无安全与性能隐患。👍</div>
+            </div>
+
+            <div class="your-cmt">
+              <textarea placeholder="手动添加审查评论…" aria-label="添加审查评论"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
+                <button class="btn btn-ghost btn-sm">取消</button>
+                <button class="btn btn-amber btn-sm">发表评论</button>
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/gsap.min.js"></script>
+<script src="assets/vendor/ScrollTrigger.min.js"></script>
+<script src="assets/vendor/SplitText.min.js"></script>
+<script src="assets/vendor/CustomEase.min.js"></script>
+<script src="assets/js/shell.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+  document.querySelectorAll('.rv').forEach(function (rv) {
+    rv.querySelectorAll('.btn-amber').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        rv.classList.add('done');
+        var k = rv.getAttribute('data-k');
+        var label = {concern:'风险',suggestion:'建议',positive:'赞同'}[k] || '点评';
+        btn.textContent = '已采纳 ' + label;
+        btn.classList.add('btn-bare');
+        btn.classList.remove('btn-amber');
+        btn.disabled = true;
+      });
+    });
+  });
+  document.getElementById('rerun').addEventListener('click', function (e) {
+    e.preventDefault();
+    var rail = document.getElementById('rail');
+    var hasGsap = typeof window.gsap !== 'undefined';
+    rail.querySelectorAll('.rv').forEach(function (r) {
+      if (hasGsap) gsap.to(r, { opacity: 0.4, duration: 0.3 });
+      else r.style.opacity = 0.4;
+    });
+    var sp = document.createElement('div');
+    sp.className = 'status-pill';
+    sp.style.marginTop = '12px';
+    sp.innerHTML = '<span class="spinner"></span> 正在重新审查…';
+    rail.insertBefore(sp, rail.firstChild);
+    if (hasGsap) gsap.from(sp, { autoAlpha: 0, y: -8, duration: 0.3 });
+    setTimeout(function () {
+      sp.remove();
+      rail.querySelectorAll('.rv').forEach(function (r) {
+        if (hasGsap) gsap.to(r, { opacity: 1, duration: 0.4 });
+        else r.style.opacity = 1;
+      });
+    }, 2600);
+  });
+</script>
+</body>
+</html>
