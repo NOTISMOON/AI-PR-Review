@@ -31,10 +31,15 @@ export function CountUp({
 
   useGSAP(
     () => {
+      const el = ref.current;
+      if (!el) return;
       if (prefersReduced()) {
-        if (ref.current) ref.current.textContent = to.toLocaleString() + suffix;
+        el.textContent = to.toLocaleString() + suffix;
         return;
       }
+      // 重置旧值再滚动：to 变化（如 provider 校正 / 真实数据到达）时立即反映新目标，
+      // 否则数字会停留在首帧 mock 上（KPI 被“冻死”，显示与同页实时数据不一致）。
+      el.textContent = "0";
       const obj = { v: 0 };
       gsap.to(obj, {
         v: to,
@@ -46,7 +51,7 @@ export function CountUp({
         },
       });
     },
-    { scope: ref }
+    { scope: ref, dependencies: [to, duration, suffix] }
   );
 
   return (

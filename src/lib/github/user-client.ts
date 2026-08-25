@@ -48,9 +48,28 @@ export interface GitHubPull {
   head: { ref: string; sha: string };
 }
 
-/** 某仓库的 PR 列表 */
-export function listRepoPulls(token: string, owner: string, repo: string): Promise<GitHubPull[]> {
-  return gh(token, `/repos/${owner}/${repo}/pulls?state=open&per_page=50`);
+/** 某仓库的 PR 列表（state: open|closed|all） */
+export function listRepoPulls(token: string, owner: string, repo: string, state = "open"): Promise<GitHubPull[]> {
+  return gh(token, `/repos/${owner}/${repo}/pulls?state=${state}&per_page=100`);
+}
+
+export interface GitHubPullDetail {
+  number: number;
+  state: string;
+  merged: boolean;
+  user: { login: string };
+  head: { sha: string };
+  title: string;
+}
+
+/** 单个 PR 详情（判断作者/状态用） */
+export function getPull(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<GitHubPullDetail> {
+  return gh(token, `/repos/${owner}/${repo}/pulls/${number}`);
 }
 
 export interface GitHubInstallation {
@@ -170,6 +189,24 @@ export function createRepoHook(
       },
     },
   });
+}
+
+/** 删除仓库 Webhook（关闭自动审查时销毁平台侧 hook），返回是否成功 */
+export async function deleteRepoHook(
+  token: string,
+  owner: string,
+  repo: string,
+  hookId: number,
+): Promise<boolean> {
+  const res = await fetch(`${API}/repos/${owner}/${repo}/hooks/${hookId}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "ai-pr-review/1.0",
+    },
+  });
+  return res.ok;
 }
 
 /** 当前用户可访问的 GitHub App 安装（仅当用户授权了 GitHub App 才有数据） */

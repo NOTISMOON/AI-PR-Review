@@ -63,23 +63,28 @@ async function scrapeByDay(
     provider === "github" ? await github.listRepos(token, 100) : await gitee.listRepos(token, 100);
   const byDay = new Map<string, number>();
   const startKey = toDayKey(startIso);
-  await Promise.all(
-    repos.slice(0, repoLimit).map(async (r) => {
-      const [owner, name] = r.full_name.split("/");
-      try {
-        const dates =
-          provider === "github"
-            ? await github.listRepoCommits(token, owner, name, startIso, login, maxPages)
-            : await gitee.listRepoCommits(token, owner, name, startIso, login, maxPages);
-        for (const iso of dates) {
-          const key = toDayKey(iso);
-          if (key >= startKey && key < endKey) byDay.set(key, (byDay.get(key) || 0) + 1);
-        }
-      } catch {
-        /* ignore */
+  const targets = repos.slice(0, repoLimit);
+  /** 单仓库采集：失败仅影响该仓库，不拖垮整批（尤其 Gitee 限流时） */
+  const collect = async (r: { full_name: string }) => {
+    const [owner, name] = r.full_name.split("/");
+    try {
+      const dates =
+        provider === "github"
+          ? await github.listRepoCommits(token, owner, name, startIso, login, maxPages)
+          : await gitee.listRepoCommits(token, owner, name, startIso, maxPages);
+      for (const iso of dates) {
+        const key = toDayKey(iso);
+        if (key >= startKey && key < endKey) byDay.set(key, (byDay.get(key) || 0) + 1);
       }
-    }),
-  );
+    } catch {
+      /* ignore */
+    }
+  };
+  // 并发限流：分批执行，降低 Gitee 免费 token 每分钟上限被 429 命中的概率，减少热力图数据遗漏
+  const CONCURRENCY = 4;
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    await Promise.all(targets.slice(i, i + CONCURRENCY).map(collect));
+  }
   return byDay;
 }
 

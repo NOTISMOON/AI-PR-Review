@@ -52,9 +52,28 @@ export interface GiteePull {
   head: { ref: string; sha: string };
 }
 
-/** 某仓库的 open PR 列表 */
-export function listRepoPulls(token: string, owner: string, repo: string): Promise<GiteePull[]> {
-  return giteeGet(token, `/repos/${owner}/${repo}/pulls?state=open&per_page=50`);
+/** 某仓库的 PR 列表（state: open|closed|merged|all） */
+export function listRepoPulls(token: string, owner: string, repo: string, state = "open"): Promise<GiteePull[]> {
+  return giteeGet(token, `/repos/${owner}/${repo}/pulls?state=${state}&per_page=100`);
+}
+
+export interface GiteePullDetail {
+  number: number;
+  state: string;
+  merged?: boolean;
+  user: { login: string };
+  head: { sha: string };
+  title: string;
+}
+
+/** 单个 PR 详情（判断作者/状态用） */
+export function getPull(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<GiteePullDetail> {
+  return giteeGet(token, `/repos/${owner}/${repo}/pulls/${number}`);
 }
 
 // ── 代码预览（文件树 / 分支 / 文件内容） ──
@@ -160,20 +179,39 @@ export function createRepoHook(
   });
 }
 
-/** 拉取某仓库自 sinceIso 以来、由 author 提交的 commit 日期（ISO 串），最多 maxPages 页 */
+/** 删除仓库 WebHook（关闭自动审查时销毁平台侧 hook），返回是否成功 */
+export async function deleteRepoHook(
+  token: string,
+  owner: string,
+  repo: string,
+  hookId: number,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${BASE}/repos/${owner}/${repo}/hooks/${hookId}?access_token=${encodeURIComponent(token)}`,
+      { method: "DELETE" },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 拉取某仓库自 sinceIso 以来的 commit 日期（ISO 串），最多 maxPages 页。
+ *  注意：不再传 Gitee 的 author 参数——Gitee 该过滤按提交者用户名匹配，经常匹配不到导致热力图空白，
+ *  因此拉全量后由上层按提交者归属近似统计（Gitee 无官方贡献日历）。 */
 export async function listRepoCommits(
   token: string,
   owner: string,
   repo: string,
   sinceIso: string,
-  author: string,
   maxPages = 2,
 ): Promise<string[]> {
   const dates: string[] = [];
   for (let page = 1; page <= maxPages; page++) {
     const items = await giteeGet(
       token,
-      `/repos/${owner}/${repo}/commits?author=${encodeURIComponent(author)}&since=${encodeURIComponent(sinceIso)}&per_page=100&page=${page}`,
+      `/repos/${owner}/${repo}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100&page=${page}`,
     );
     if (!Array.isArray(items) || items.length === 0) break;
     for (const c of items as any[]) {
@@ -183,4 +221,117 @@ export async function listRepoCommits(
     if (items.length < 100) break;
   }
   return dates;
+}
+
+// ── 决策回写（审查通过 / PR 评论 / 关闭 PR，供「审查处理中心」使用） ──
+
+export interface GiteeApiResult {
+  ok: boolean;
+  status?: number;
+  message?: string;
+  /** 回写评论成功后平台的评论 id（取消采纳删除用） */
+  commentId?: string;
+}
+
+/** 统一包装 Gitee 写接口：成功返回 ok（可选解析 comment id），失败解析出 status + 真实 message */
+async function giteeCall(
+  token: string,
+  url: string,
+  init?: RequestInit,
+  withId = false,
+): Promise<GiteeApiResult> {
+  try {
+    const res = await fetch(url, init);
+    if (res.ok) {
+      if (withId) {
+        try {
+          const j = (await res.json()) as { id?: number | string };
+          if (j?.id != null) return { ok: true, status: res.status, commentId: String(j.id) };
+        } catch {
+          /* 响应体非 JSON 或缺少 id */
+        }
+      }
+      return { ok: true, status: res.status };
+    }
+    let message = "";
+    try {
+      const j = (await res.json()) as { message?: string };
+      message = j.message ?? "";
+    } catch {
+      /* 非 JSON 忽略 */
+    }
+    return { ok: false, status: res.status, message };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
+/** 处理 PR 审查（审查通过）。Gitee v5 该接口按 formData 接收，仅 force 字段（强制通过，忽略分支保护审查/测试规则） */
+export async function reviewPullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  force = false,
+): Promise<GiteeApiResult> {
+  const form = new URLSearchParams();
+  form.set("access_token", token);
+  if (force) form.set("force", "true");
+  return giteeCall(token, `${BASE}/repos/${owner}/${repo}/pulls/${number}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: form.toString(),
+  });
+}
+
+/** 提交 PR 评论（返回评论 id 供取消采纳删除） */
+export async function createPullComment(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  body: string,
+): Promise<GiteeApiResult> {
+  return giteeCall(
+    token,
+    `${BASE}/repos/${owner}/${repo}/pulls/${number}/comments?access_token=${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ body }),
+    },
+    true, // 解析返回的评论 id
+  );
+}
+
+/** 删除 PR 评论（取消采纳时撤销回写） */
+export async function deletePullComment(
+  token: string,
+  owner: string,
+  repo: string,
+  commentId: string,
+): Promise<GiteeApiResult> {
+  return giteeCall(
+    token,
+    `${BASE}/repos/${owner}/${repo}/pulls/comments/${commentId}?access_token=${encodeURIComponent(token)}`,
+    { method: "DELETE" },
+  );
+}
+
+/** 关闭 PR（PATCH state=closed） */
+export async function closePullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<GiteeApiResult> {
+  return giteeCall(
+    token,
+    `${BASE}/repos/${owner}/${repo}/pulls/${number}?access_token=${encodeURIComponent(token)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ state: "closed" }),
+    },
+  );
 }

@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { CountUp, Tilt, SplitTitle } from "@/app/components/motion";
-import { usePlatform, type Platform } from "@/app/components/platform";
+import { usePlatform } from "@/app/components/platform";
 import { authFetch } from "@/lib/client/auth-fetch";
+import { cachedFetch, invalidateCache } from "@/lib/client/data-cache";
 
 gsap.registerPlugin(useGSAP);
 
@@ -26,6 +27,23 @@ interface LiveDashboard {
   topRepos: { full_name: string; name: string; description: string | null; language: string | null; stargazers_count: number; html_url: string }[];
   languageDistribution: { language: string; repoCount: number }[];
   openPulls: { repo: string; number: number; title: string; user: string }[];
+  reviewStats?: {
+    totalReviews: number;
+    riskyReviews: number;
+    totalRisks: number;
+    pendingReviews: number;
+    passRate: number;
+  };
+  pendingReviews?: {
+    id: number;
+    prNumber: number;
+    repoFullName: string;
+    prTitle: string | null;
+    riskLevel: string | null;
+    riskCount: number;
+    decision: string;
+    completedAt: string | null;
+  }[];
 }
 
 interface HeatData {
@@ -36,93 +54,69 @@ interface HeatData {
   max: number;
 }
 
-interface Repo {
-  n: string;
-  owner: string;
-  href?: string;
-  tag: string;
-  cls: string;
-  lan: string;
-  lanl: string;
-  stars: number;
-  prs: number;
-}
-
-interface Pr {
-  c: string;
-  t: string;
-  m: string;
-  l: string;
-  lc: string;
-}
-
-/** 每个登录身份对应的独立数据集合（多平台登录，但数据不聚合） */
-const PLATFORMS: Record<Platform, {
-  kpis: { icon: React.ReactNode; value: number; suffix: string; label: string }[];
-  repos: Repo[];
-  prs: Pr[];
-  peak: string;
-}> = {
-  github: {
-    kpis: [
-      { icon: <History className="size-5" />, value: 1248, suffix: "", label: "年内提交" },
-      { icon: <FolderGit2 className="size-5" />, value: 19, suffix: "", label: "仓库数" },
-      { icon: <GitPullRequest className="size-5" />, value: 12, suffix: "", label: "待审 PR" },
-      { icon: <RadioTower className="size-5" />, value: 96, suffix: "%", label: "问题检出率" },
-    ],
-    repos: [
-      { n: "ai-pr-<b>review</b>", owner: "nicepkg · GitHub", tag: "审查中", cls: "text-amber bg-amber/10", lan: "bg-cyan", lanl: "TypeScript", stars: 128, prs: 3 },
-      { n: "nextjs-<b>blog</b>", owner: "nicepkg · GitHub", tag: "已开启", cls: "text-green bg-[var(--green-soft)]", lan: "bg-cyan", lanl: "TypeScript", stars: 56, prs: 0 },
-      { n: "rust-<b>parser</b>", owner: "nicepkg · GitHub", tag: "审查中", cls: "text-amber bg-amber/10", lan: "bg-[#ff8870]", lanl: "Rust", stars: 89, prs: 1 },
-    ],
-    prs: [
-      { c: "var(--red)", t: "fix(handler): guard against missing upload file", m: "ai-pr-review #128 · +84 −21", l: "2 风险", lc: "text-red bg-[var(--red-soft)]" },
-      { c: "var(--amber)", t: "feat: cache context snapshots to fuzzy hits", m: "ai-pr-review #127 · +320 −12", l: "3 建议", lc: "text-amber bg-amber/10" },
-      { c: "var(--cyan)", t: "refactor: migrate dashboard to new design", m: "ai-pr-review #126 · +115 −89", l: "排队中", lc: "text-face-2 bg-ink-800" },
-    ],
-    peak: "8 月 · 最佳仓库 ai-pr-review",
-  },
-  gitee: {
-    kpis: [
-      { icon: <History className="size-5" />, value: 402, suffix: "", label: "年内提交" },
-      { icon: <FolderGit2 className="size-5" />, value: 4, suffix: "", label: "仓库数" },
-      { icon: <GitPullRequest className="size-5" />, value: 5, suffix: "", label: "待审 PR" },
-      { icon: <RadioTower className="size-5" />, value: 88, suffix: "%", label: "问题检出率" },
-    ],
-    repos: [
-      { n: "go-<b>gateway</b>", owner: "nicepkg · Gitee", tag: "审查中", cls: "text-amber bg-amber/10", lan: "bg-[#46d1e8]", lanl: "Go", stars: 67, prs: 1 },
-      { n: "ml-<b>toolkit</b>", owner: "nicepkg · Gitee", tag: "未开启", cls: "text-face-2 bg-ink-800", lan: "bg-violet", lanl: "Python", stars: 42, prs: 0 },
-      { n: "data-<b>pipeline</b>", owner: "nicepkg · Gitee", tag: "已开启", cls: "text-green bg-[var(--green-soft)]", lan: "bg-violet", lanl: "Python", stars: 38, prs: 2 },
-    ],
-    prs: [
-      { c: "var(--red)", t: "feat: add gitee webhook receiver", m: "go-gateway #24 · +72 −6", l: "2 风险", lc: "text-red bg-[var(--red-soft)]" },
-      { c: "var(--amber)", t: "fix: rate-limit model router retries", m: "go-gateway #23 · +31 −18", l: "3 建议", lc: "text-amber bg-amber/10" },
-      { c: "var(--cyan)", t: "docs: update README for v2", m: "ml-toolkit #22 · +58 −12", l: "排队中", lc: "text-face-2 bg-ink-800" },
-    ],
-    peak: "7 月 · 最佳仓库 go-gateway",
-  },
-};
+/** KPI 卡片结构（不含具体数值，数值由下方实时数据填充） */
+const KPI_CARDS = [
+  { icon: <History className="size-5" />, suffix: "", label: "年内提交" },
+  { icon: <FolderGit2 className="size-5" />, suffix: "", label: "仓库数" },
+  { icon: <GitPullRequest className="size-5" />, suffix: "", label: "待审 PR" },
+  { icon: <RadioTower className="size-5" />, suffix: "%", label: "问题检出率" },
+];
 
 export default function DashboardPage() {
   const langBarRef = useRef<HTMLDivElement>(null);
-  const { provider, meta } = usePlatform();
-  const d = PLATFORMS[provider];
+  const { provider, meta, ready } = usePlatform();
 
   // 接库：按当前登录身份拉 `/api/{p}/dashboard`，失败/未登录回退 mock
   const [live, setLive] = useState<LiveDashboard | null>(null);
   const [heat, setHeat] = useState<HeatData | null>(null);
   const [commitTotal, setCommitTotal] = useState<number | null>(null);
   const [year, setYear] = useState<number | undefined>(undefined);
+  const [me, setMe] = useState<{ login: string; name?: string; avatar?: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // 真实登录身份（覆盖 PLATFORM_META 占位）
+  useEffect(() => {
+    authFetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u?.login) setMe(u);
+      })
+      .catch(() => {});
+  }, []);
+
+  /** 同步数据：清缓存后重新拉取控制台与贡献数据 */
+  async function syncData() {
+    setSyncing(true);
+    try {
+      // 先局部失效：把当前 provider 的 dashboard / contributions 缓存清掉，避免重拉吃到旧缓存
+      invalidateCache(`/api/${provider}/dashboard`);
+      invalidateCache(`/api/${provider}/contributions`);
+      // 保留原有 POST 行为（POST 清后端缓存并返回最新 dashboard 数据）
+      const [dr, cr] = await Promise.all([
+        authFetch(`/api/${provider}/dashboard`, { method: "POST" }),
+        cachedFetch<HeatData>(`/api/${provider}/contributions`, 60),
+      ]);
+      if (dr.ok) {
+        const data = await dr.json();
+        if (typeof data.repoCount === "number") setLive(data);
+      }
+      // contributions 走 cachedFetch：cr 直接是数据（非 Response）
+      const hd = cr;
+      if (hd && Array.isArray(hd.weeks)) {
+        setHeat(hd);
+        if (typeof hd.total === "number") setCommitTotal(hd.total);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }
   // 仅允许「近12个月」和「当前年」：GitHub 官方贡献接口只暴露最近 1 年，过往年份拿不到准确数据
   const years = [new Date().getFullYear()];
   useEffect(() => {
     if (provider !== "github" && provider !== "gitee") return;
+    if (!ready) return; // 身份未校正前不发平台请求，避免首帧误打 /api/github/* 产生 401 { error: "provider" }
     let cancelled = false;
-    authFetch(`/api/${provider}/dashboard`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as LiveDashboard;
-      })
+    cachedFetch<LiveDashboard>(`/api/${provider}/dashboard`, 30)
       .then((data) => {
         if (!cancelled && typeof data.repoCount === "number") setLive(data);
       })
@@ -131,11 +125,7 @@ export default function DashboardPage() {
       });
     // 提交贡献热力图（独立接口，支持年份，慢则不影响卡片渲染）
     const q = year ? `?year=${year}` : "";
-    authFetch(`/api/${provider}/contributions${q}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as HeatData;
-      })
+    cachedFetch<HeatData>(`/api/${provider}/contributions${q}`, 60)
       .then((data) => {
         if (cancelled) return;
         if (Array.isArray(data.weeks) && data.weeks.length > 0) setHeat(data);
@@ -147,14 +137,18 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [provider, year]);
+  }, [provider, year, ready]);
 
-  const kpiView = d.kpis.map((k, i) => {
-    if (i === 0 && commitTotal !== null) return { ...k, value: commitTotal };
-    if (i === 1 && live) return { ...k, value: live.repoCount };
-    if (i === 2 && live) return { ...k, value: live.openPullCount };
-    return k;
-  });
+  // KPI 数值：全部来自实时数据，未加载/缺失一律为 0，绝不回落 mock 假值
+  const kpiValues = [
+    commitTotal ?? 0,
+    live?.repoCount ?? 0,
+    live?.openPullCount ?? 0,
+    live?.reviewStats && live.reviewStats.totalReviews > 0
+      ? Math.round((live.reviewStats.riskyReviews / live.reviewStats.totalReviews) * 100)
+      : 0,
+  ];
+  const kpiView = KPI_CARDS.map((k, i) => ({ ...k, value: kpiValues[i] }));
   const repoView = live
     ? live.recentRepos.map((r) => ({
         n: r.name,
@@ -165,10 +159,20 @@ export default function DashboardPage() {
         lan: "bg-cyan",
         lanl: r.language || "—",
         stars: r.stargazers_count,
-        prs: 0,
+        prs: live.openPulls.filter((p) => p.repo === r.full_name).length,
       }))
-    : d.repos;
-  const prView = live
+    : [];
+  // 待审 PR：优先展示「待处理」的自动审查结果（链接到审查处理中心），否则为平台 open PR
+  const pendingView = live?.pendingReviews?.length
+    ? live.pendingReviews.map((p) => ({
+        c: p.riskCount > 0 ? "var(--red)" : "var(--amber)",
+        t: p.prTitle || `PR #${p.prNumber}`,
+        m: `${p.repoFullName} #${p.prNumber} · ${p.riskLevel || "已审查"} · ${p.riskCount} 处问题`,
+        l: "待处理",
+        lc: "text-face-2 bg-ink-800",
+      }))
+    : null;
+  const prView = pendingView ?? (live
     ? live.openPulls.slice(0, 5).map((p) => ({
         c: "var(--amber)",
         t: p.title,
@@ -176,8 +180,7 @@ export default function DashboardPage() {
         l: "待审",
         lc: "text-face-2 bg-ink-800",
       }))
-    : d.prs;
-
+    : []);
   // 语言占比（实时统计）
   const LANG_COLORS = ["var(--cyan)", "var(--amber)", "var(--violet)", "var(--green)", "var(--red)", "var(--text-3)"];
   const langTotal = live ? live.languageDistribution.reduce((s, x) => s + x.repoCount, 0) : 0;
@@ -188,13 +191,7 @@ export default function DashboardPage() {
         name: l.language,
         v: `${l.repoCount} 个`,
       }))
-    : [
-        { w: 46, c: "var(--cyan)", name: "TypeScript", v: "46%" },
-        { w: 22, c: "var(--amber)", name: "JavaScript", v: "22%" },
-        { w: 16, c: "var(--violet)", name: "Python", v: "16%" },
-        { w: 10, c: "var(--green)", name: "Go", v: "10%" },
-        { w: 6, c: "var(--red)", name: "其他", v: "6%" },
-      ];
+    : [];
 
   // 语言占比长条 scaleX 增长（原型 #langbar 细节动画）
   useGSAP(
@@ -227,22 +224,26 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2.5">
-          <Button variant="ghost" size="sm">同步数据</Button>
+          <Button variant="ghost" size="sm" onClick={syncData} disabled={syncing}>
+            {syncing ? "同步中…" : "同步数据"}
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/repos">管理仓库</Link>
           </Button>
         </div>
       </div>
 
-      {/* ===== 用户卡片（当前登录身份） ===== */}
+      {/* ===== 用户卡片（当前登录身份，真实用户覆盖占位） ===== */}
       <div className="mb-5 flex items-center gap-4 rounded-2xl border border-border bg-card p-5">
         <span className="size-13 shrink-0 overflow-hidden rounded-full border-2 border-line-strong">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={meta.avatar} alt={meta.user} className="size-full object-cover" />
+          <img src={me?.avatar || meta.avatar} alt={me?.login || meta.user} className="size-full object-cover" />
         </span>
         <div>
-          <h2 className="font-display text-[22px] font-semibold">{meta.user}</h2>
-          <div className="font-mono text-[13px] text-amber">{meta.handle} · 已授权 {meta.name}</div>
+          <h2 className="font-display text-[22px] font-semibold">{me?.login || meta.user}</h2>
+          <div className="font-mono text-[13px] text-amber">
+            {me?.login || meta.handle} · 已授权 {meta.name}
+          </div>
         </div>
         <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--green-soft)] px-3 py-1 text-[12px] font-semibold text-green">
           <span className="size-1.5 rounded-full bg-green" /> 在线
@@ -292,7 +293,7 @@ export default function DashboardPage() {
           <div className="overflow-x-auto pb-1">
             <HeatmapGrid data={heat} />
           </div>
-          <div className="mt-3 text-[12.5px] text-face-3">◆ 活跃峰值 {d.peak}</div>
+          <div className="mt-3 text-[12.5px] text-face-3">◆ {live?.topRepos?.[0] ? `最佳仓库 ${live.topRepos[0].name}` : "最佳仓库 暂无数据"}</div>
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
@@ -377,13 +378,7 @@ function HeatmapGrid({ data }: { data?: HeatData | null }) {
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const real = !!data && data.weeks.length > 0;
-  const weeks = real ? data!.weeks : (() => {
-    // 无数据时回退随机图案（52 周 × 7）
-    const pattern = [0, 0, 0, 1, 1, 2, 3, 4, 0, 2];
-    return Array.from({ length: 52 }, (_, w) =>
-      Array.from({ length: 7 }, (_, r) => pattern[(w * 7 + r) % pattern.length]),
-    );
-  })();
+  const weeks = real && data!.weeks ? data!.weeks : [];
 
   useGSAP(
     () => {

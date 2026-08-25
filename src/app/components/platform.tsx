@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { authFetch } from "@/lib/client/auth-fetch";
 
 /**
  * 多平台登录、单登录身份、数据隔离。
@@ -65,20 +66,42 @@ interface PlatformCtxValue {
   provider: Platform;
   setProvider: (p: Platform) => void;
   meta: (typeof PLATFORM_META)[Platform];
+  /** 视角是否已用真实登录身份（/api/auth/me）校正过；未就绪前平台数据请求应跳过 */
+  ready: boolean;
 }
 
 const PlatformCtx = createContext<PlatformCtxValue>({
   provider: "github",
   setProvider: () => {},
   meta: PLATFORM_META.github,
+  ready: false,
 });
 
 export function PlatformProvider({ children }: { children: ReactNode }) {
   // SSR/客户端首次一致：先给默认值，挂载后再按 URL/localStorage 校正，避免 hydration 错乱
   const [provider, setProviderState] = useState<Platform>("github");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setProviderState(readInitialPlatform());
+    // 视角跟随「真实登录身份」：URL/localStorage 可能缺失或残留脏值（例如 gitee 登录但 localStorage 仍是 github），
+    // 会把平台请求打到错误平台接口导致一串 401 { error: "provider" }。以 /api/auth/me 的真实 provider 强制校正。
+    authFetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u && isPlatform(u.provider)) {
+          try {
+            localStorage.setItem("rf_platform", u.provider);
+          } catch {
+            /* ignore */
+          }
+          setProviderState(u.provider);
+        }
+      })
+      .catch(() => {
+        /* 未登录/接口异常时保持现有视角 */
+      })
+      .finally(() => setReady(true));
   }, []);
 
   const setProvider = useCallback((p: Platform) => {
@@ -91,7 +114,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <PlatformCtx.Provider value={{ provider, setProvider, meta: PLATFORM_META[provider] }}>
+    <PlatformCtx.Provider value={{ provider, setProvider, meta: PLATFORM_META[provider], ready }}>
       {children}
     </PlatformCtx.Provider>
   );
