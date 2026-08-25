@@ -12,12 +12,15 @@ import { usePlatform } from "@/app/components/platform";
 import { authFetch } from "@/lib/client/auth-fetch";
 
 const RISK_LEVELS = ["宽松", "默认", "严格"];
+const DEPTH_LEVELS = ["轻度", "标准", "深度"];
 
 interface AiSettings {
   model: string;
   temperature: number;
   maxComments: string;
   riskThreshold: string;
+  /** 审查深度：fast | standard | deep（轻度 / 标准 / 深度） */
+  depth: string;
 }
 interface SwitchSettings {
   auto_write: boolean;
@@ -115,7 +118,7 @@ function GiteeMark() {
 
 export default function SettingsPage() {
   const { provider, meta } = usePlatform();
-  const [ai, setAi] = useState<AiSettings>({ model: "", temperature: 0.2, maxComments: "20", riskThreshold: "默认" });
+  const [ai, setAi] = useState<AiSettings>({ model: "", temperature: 0.2, maxComments: "20", riskThreshold: "默认", depth: "standard" });
   const [switches, setSwitches] = useState<SwitchSettings>({ auto_write: true, set_status: true, diff_only: true, skip_draft: false });
   const [repos, setRepos] = useState<RepoRow[]>([]);
   const [models, setModels] = useState<{ id: string; name: string }[]>([]);
@@ -173,7 +176,7 @@ export default function SettingsPage() {
       setToast(
         next
           ? `已开启 ${repo.name} 自动审查${d.webhookConfigured ? " · 已自动配置 Webhook" : ""}`
-          : `已关闭 ${repo.name} 自动审查`,
+          : `已关闭 ${repo.name} 自动审查${d.webhookDestroyed ? " · 已销毁 Webhook" : ""}`,
       );
       setTimeout(() => setToast(""), 3000);
     } catch {
@@ -295,7 +298,16 @@ export default function SettingsPage() {
             className="w-24 text-right"
           />
         </FormRow>
-        <FormRow title="风险阈值" desc="判定为“严重”所需的最少命中数">
+        <FormRow title="审查深度" desc="自动审查的分析粒度：轻度更快，深度更全面">
+          <Seg
+            options={DEPTH_LEVELS}
+            value={{ fast: "轻度", standard: "标准", deep: "深度" }[ai.depth] ?? "标准"}
+            onChange={(v) =>
+              setAi((prev) => ({ ...prev, depth: { 轻度: "fast", 标准: "standard", 深度: "deep" }[v] ?? "standard" }))
+            }
+          />
+        </FormRow>
+        <FormRow title="风险阈值" desc="判定问题严重程度的口径：宽松更宽容，严格更严格">
           <Seg options={RISK_LEVELS} value={ai.riskThreshold} onChange={(v) => setAi((prev) => ({ ...prev, riskThreshold: v }))} />
         </FormRow>
       </section>

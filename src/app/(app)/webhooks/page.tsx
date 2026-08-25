@@ -146,7 +146,7 @@ async function hmacHex(secret: string, data: string): Promise<string> {
 }
 
 export default function WebhooksPage() {
-  const { provider, meta } = usePlatform();
+  const { provider, meta, ready } = usePlatform();
   const [config, setConfig] = useState<WebhookConfig | null>(null);
   const [events, setEvents] = useState(EVENTS);
   const [rules, setRules] = useState(RULES);
@@ -166,6 +166,7 @@ export default function WebhooksPage() {
   const [hookMsg, setHookMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!ready) return; // 身份未校正前不发平台请求，避免首帧误打错误平台接口产生 401
     setLoading(true);
     setLoadError("");
     try {
@@ -196,7 +197,7 @@ export default function WebhooksPage() {
     } finally {
       setLoading(false);
     }
-  }, [provider]);
+  }, [provider, ready]);
 
   useEffect(() => {
     loadData();
