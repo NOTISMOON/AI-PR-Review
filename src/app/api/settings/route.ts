@@ -6,6 +6,7 @@ import {
   getWebhookConfig,
   setSetting,
 } from "@/lib/db/mysql";
+import { cachedRead, cacheDel } from "@/lib/cache/redis";
 import { getAvailableModels } from "@/lib/models/registry";
 import { resolveWebhookSession } from "@/lib/platform/webhook";
 import * as github from "@/lib/github/user-client";
@@ -13,11 +14,17 @@ import * as gitee from "@/lib/gitee/client";
 
 export const runtime = "nodejs";
 
+const SETTINGS_CACHE_TTL = 60; // 全局设置缓存：60s，保存时主动失效
+
+const settingsCacheKey = (provider: string, userId: number) => `settings:${provider}:${userId}`;
+
 interface AiSettings {
   model: string;
   temperature: number;
   maxComments: string;
   riskThreshold: string;
+  /** 审查深度：fast | standard | deep（轻度 / 标准 / 深度） */
+  depth: string;
 }
 
 interface SwitchSettings {
@@ -27,7 +34,13 @@ interface SwitchSettings {
   skip_draft: boolean;
 }
 
-const DEFAULT_AI: AiSettings = { model: "", temperature: 0.2, maxComments: "20", riskThreshold: "默认" };
+const DEFAULT_AI: AiSettings = {
+  model: "",
+  temperature: 0.2,
+  maxComments: "20",
+  riskThreshold: "默认",
+  depth: "standard",
+};
 const DEFAULT_SWITCHES: SwitchSettings = {
   auto_write: true,
   set_status: true,
@@ -35,31 +48,35 @@ const DEFAULT_SWITCHES: SwitchSettings = {
   skip_draft: false,
 };
 
-/** 读取当前登录平台的全局设置（AI 参数 + 审查规则 + webhook 事件/通知规则 + 仓库开关） */
+/** 读取当前登录平台的全局设置（Redis 缓存：未命中才构建并写入；保存时主动失效） */
 export async function GET(req: NextRequest) {
   const r = await resolveWebhookSession(req);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: 401 });
 
   try {
-    await Promise.all([ensureSettingTables(), ensureWebhookTables()]);
-    const [ai, switches, repoAuto] = await Promise.all([
-      getSettingJson<AiSettings>(r.ctx.dbUser.id, "ai"),
-      getSettingJson<SwitchSettings>(r.ctx.dbUser.id, "switches"),
-      getSettingJson<Record<string, boolean>>(r.ctx.dbUser.id, "repo_auto_review"),
-    ]);
-    const cfg = await getWebhookConfig(r.ctx.dbUser.id, r.provider);
+    const cacheKey = settingsCacheKey(r.provider, r.ctx.dbUser.id);
+    const data = await cachedRead(cacheKey, SETTINGS_CACHE_TTL, async () => {
+      await Promise.all([ensureSettingTables(), ensureWebhookTables()]);
+      const [ai, switches, repoAuto] = await Promise.all([
+        getSettingJson<AiSettings>(r.ctx.dbUser.id, "ai"),
+        getSettingJson<SwitchSettings>(r.ctx.dbUser.id, "switches"),
+        getSettingJson<Record<string, boolean>>(r.ctx.dbUser.id, "repo_auto_review"),
+      ]);
+      const cfg = await getWebhookConfig(r.ctx.dbUser.id, r.provider);
 
-    const models = getAvailableModels().map((m) => ({ id: m.modelId, name: m.displayName }));
-    const repos = await listReposWithSwitch(r, repoAuto ?? {});
+      const models = getAvailableModels().map((m) => ({ id: m.modelId, name: m.displayName }));
+      const repos = await listReposWithSwitch(r, repoAuto ?? {});
 
-    return NextResponse.json({
-      ai: ai ?? DEFAULT_AI,
-      switches: switches ?? DEFAULT_SWITCHES,
-      webhook: { events: cfg?.events ?? null, rules: cfg?.rules ?? null },
-      repoAutoReview: repoAuto ?? {},
-      models,
-      repos,
+      return {
+        ai: ai ?? DEFAULT_AI,
+        switches: switches ?? DEFAULT_SWITCHES,
+        webhook: { events: cfg?.events ?? null, rules: cfg?.rules ?? null },
+        repoAutoReview: repoAuto ?? {},
+        models,
+        repos,
+      };
     });
+    return NextResponse.json(data);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -85,6 +102,13 @@ export async function POST(req: NextRequest) {
     }
     if (body.switches && typeof body.switches === "object") {
       await setSetting(r.ctx.dbUser.id, "switches", JSON.stringify(body.switches));
+    }
+
+    // 保存后删除旧缓存，下次访问重建
+    try {
+      await cacheDel(settingsCacheKey(r.provider, r.ctx.dbUser.id));
+    } catch {
+      /* 缓存删除失败不影响保存 */
     }
 
     return NextResponse.json({ ok: true });

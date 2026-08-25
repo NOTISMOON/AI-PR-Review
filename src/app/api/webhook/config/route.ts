@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureWebhookTables, getWebhookConfig, upsertWebhookConfig } from "@/lib/db/mysql";
 import { getRequestOrigin } from "@/lib/request";
+import { cacheDel } from "@/lib/cache/redis";
 import {
   buildWebhookConfig,
   generateWebhookSecret,
@@ -8,6 +9,9 @@ import {
 } from "@/lib/platform/webhook";
 
 export const runtime = "nodejs";
+
+/** 全局设置接口读取该配置，保存后同步失效设置缓存 */
+const settingsCacheKey = (provider: string, userId: number) => `settings:${provider}:${userId}`;
 
 /** 读取 / 保存当前登录平台的 Webhook 端点配置 */
 export async function GET(req: NextRequest) {
@@ -63,6 +67,13 @@ export async function POST(req: NextRequest) {
       url: `${origin}/api/webhook/${r.provider}`,
       secret: newSecret,
     });
+
+    // 事件/规则变化会影响全局设置页展示，失效其缓存
+    try {
+      await cacheDel(settingsCacheKey(r.provider, r.ctx.dbUser.id));
+    } catch {
+      /* ignore */
+    }
 
     const data = await buildWebhookConfig(r.provider, r.ctx.dbUser.id, r.token, origin);
     return NextResponse.json(data);

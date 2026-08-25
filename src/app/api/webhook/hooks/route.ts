@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureWebhookTables, getWebhookConfig } from "@/lib/db/mysql";
+import {
+  ensureSettingTables,
+  ensureWebhookTables,
+  getSettingJson,
+  getWebhookConfig,
+  setSetting,
+} from "@/lib/db/mysql";
 import { getRequestOrigin } from "@/lib/request";
+import { cacheDel } from "@/lib/cache/redis";
 import { ensureRepoHook, resolveWebhookSession } from "@/lib/platform/webhook";
+
+/** 一键配置会同步仓库开关，变更后失效全局设置缓存 */
+const settingsCacheKey = (provider: string, userId: number) => `settings:${provider}:${userId}`;
 
 export const runtime = "nodejs";
 
@@ -42,6 +52,19 @@ export async function POST(req: NextRequest) {
       secret: cfg.secret,
       events,
     });
+
+    // 同步全局设置：该仓库标记为「已开启自动审查」（无论新建还是已存在都算已配置）
+    try {
+      await ensureSettingTables();
+      const repoAuto = (await getSettingJson<Record<string, boolean>>(r.ctx.dbUser.id, "repo_auto_review")) ?? {};
+      repoAuto[`${owner}/${repo}`] = true;
+      await setSetting(r.ctx.dbUser.id, "repo_auto_review", JSON.stringify(repoAuto));
+      // 失效全局设置缓存，让设置页显示最新开关状态
+      await cacheDel(settingsCacheKey(r.provider, r.ctx.dbUser.id));
+    } catch {
+      /* 同步失败不影响创建结果 */
+    }
+
     return NextResponse.json({ ok: true, created: result.created, id: result.id });
   } catch (e) {
     const err = e as Error & { status?: number };

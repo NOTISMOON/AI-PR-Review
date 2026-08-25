@@ -7,6 +7,9 @@ build/
 .env*
 !.env.example
 
+# GitHub App 私钥等本地敏感文件
+.secrets/
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -16,3 +19,7 @@ pnpm-debug.log*
 .claude
 .codegraph/*
 .trae/*
+
+# 构建产物与 npm 锁文件（项目使用 pnpm，npm 锁文件不入库）
+tsconfig.tsbuildinfo
+package-lock.json
