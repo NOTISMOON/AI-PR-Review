@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "../styles/index.css";
+import { Toaster } from "./components/ui/sonner";
 
 export const metadata: Metadata = {
   title: {
@@ -28,7 +29,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Toaster richColors />
+      </body>
     </html>
   );
 }

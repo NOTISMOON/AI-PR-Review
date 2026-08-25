@@ -12,7 +12,6 @@ import {
   fetchPRCommits, fetchPRComments, fetchRepoTree, fetchConfigFile,
 } from '@/lib/github';
 import { extractSurroundingContext } from './sources/full-files';
-import { buildDependencyGraph } from './sources/dependencies';
 import { findRelatedFiles } from './sources/related-files';
 import { prioritizeFiles } from './prioritizer';
 import { estimateTokens } from './token-counter';
@@ -77,7 +76,6 @@ export async function collectContext(
 
   // ═══ Phase 3: File-level context extraction ═══
   let filesWithContext: FileWithContext[] = [];
-  let dependencyGraph: DependencyGraph | null = null;
 
   if (opts.includeSurroundingCode && prInfo.headSha) {
     // Prioritize files to limit full-content fetches
@@ -90,15 +88,9 @@ export async function collectContext(
   }
 
   // ═══ Phase 4: Dependency graph ═══
-  if (opts.includeDependencyGraph && filesWithContext.length > 0) {
-    const contentMap = new Map<string, string>();
-    for (const fwc of filesWithContext) {
-      if (fwc.fullContent) {
-        contentMap.set(fwc.path, fwc.fullContent);
-      }
-    }
-    dependencyGraph = buildDependencyGraph(fileChanges, contentMap);
-  }
+  // 依赖图由 LangGraph 的 build_graph 节点用 AI 分析构建（按审查深度决定是否跳过），
+  // 此处不再做硬编码正则构建（耗时且不通用）。
+  let dependencyGraph: DependencyGraph | null = null;
 
   // ═══ Phase 5: AI-driven related file retrieval (RAG) ★ NEW ═══
   let relatedFiles: RelatedFile[] = [];

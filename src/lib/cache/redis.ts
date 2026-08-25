@@ -118,7 +118,8 @@ export async function cachedRead<T>(
     const again = await cacheGet<T>(key);
     if (again !== null) return again;
     const value = await build();
-    await cacheSet(key, value, ttlSec);
+    // 写入 TTL 加随机抖动（约 85%~115%），避免一大批 key 同时到点造成缓存雪崩
+    await cacheSet(key, value, ttlSec * (0.85 + Math.random() * 0.3));
     return value;
   } finally {
     if (locked) await releaseLock(lockKey, token);
@@ -167,5 +168,64 @@ export async function releaseLock(key: string, token: string): Promise<void> {
     await c.eval(script, 1, `lock:${key}`, token);
   } catch {
     /* ignore */
+  }
+}
+
+// ── 实时通知广播（Redis Pub/Sub，多实例 SSE 推送用） ──
+
+/** 通知广播频道 */
+export const NOTIFY_CHANNEL = "notify";
+
+/** 广播一条通知消息到频道（任意实例发布，各实例的 SSE 订阅者收到后推给前端） */
+export async function redisPublish(channel: string, message: unknown): Promise<boolean> {
+  const c = await ensureRedis();
+  if (!c) return false;
+  try {
+    await c.publish(channel, JSON.stringify(message));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let subClient: Redis | null = null;
+
+/**
+ * 获取专用的 subscriber 连接。
+ * ioredis 中 subscribe 会把连接切换为订阅模式、不能再执行普通命令，
+ * 因此必须与缓存用的主连接分离；多个 SSE 连接共享这一个订阅连接即可。
+ */
+export function getRedisSubscriber(): Redis | null {
+  if (!process.env.REDIS_URL) return null;
+  if (!subClient) {
+    subClient = new Redis(process.env.REDIS_URL, {
+      lazyConnect: true,
+      enableReadyCheck: false,
+      maxRetriesPerRequest: 1,
+      retryStrategy: () => null,
+    });
+    subClient.on("error", () => {
+      /* 静默：订阅失败时 SSE 端降级为兜底轮询 */
+    });
+  }
+  return subClient;
+}
+
+let notifySubscribed = false;
+
+/** 建立对通知频道的订阅（幂等，全局共享一次）；返回是否可用 */
+export async function ensureNotifySubscribed(): Promise<Redis | null> {
+  const sub = getRedisSubscriber();
+  if (!sub) return null;
+  try {
+    if (sub.status === "wait") await sub.connect();
+    if (sub.status !== "ready") return null;
+    if (!notifySubscribed) {
+      await sub.subscribe(NOTIFY_CHANNEL);
+      notifySubscribed = true;
+    }
+    return sub;
+  } catch {
+    return null;
   }
 }
