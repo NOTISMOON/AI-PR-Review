@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import {
   Bell,
   CheckCheck,
+  Eye,
   FileCode2,
   FolderGit2,
   GitPullRequest,
@@ -19,12 +20,16 @@ import {
   PanelLeftOpen,
   Search,
   Settings,
+  Trash2,
   Webhook,
+  X,
 } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Button } from "@/app/components/ui/button";
 import { usePlatform } from "@/app/components/platform";
 import { authFetch } from "@/lib/client/auth-fetch";
+import { invalidateCache } from "@/lib/client/data-cache";
+import { toast } from "sonner";
 
 gsap.registerPlugin(useGSAP);
 
@@ -112,13 +117,16 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)} 天前`;
 }
 
-/** 顶栏通知面板：未读角标 + 列表 + 已读 */
+/** 顶栏通知面板：未读角标 + 列表 + 已读 + 右键查看/删除 */
 function NotificationPanel() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  // 右键菜单：目标通知 + 面板内坐标
+  const [ctx, setCtx] = useState<{ id: number; x: number; y: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,11 +142,45 @@ function NotificationPanel() {
     }
   }, []);
 
-  // 初始加载未读数 + 每 30s 轮询
+  // 初始加载 + SSE 实时推送（多实例经 Redis 广播）+ 兜底轮询（断线保底）
   useEffect(() => {
     load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
+    const t = setInterval(load, 60000);
+    const es = new EventSource("/api/notifications/stream");
+    es.addEventListener("notification", (e) => {
+      // 收到通知说明服务端数据有更新，局部失效审查任务 / 通知缓存（provider 前缀此处无法得知，故只清通用前缀）
+      invalidateCache("/api/review/tasks");
+      invalidateCache("/api/notifications");
+      load();
+      // 实时 toast 提示（消息带 type/title/link）
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as {
+          type?: string;
+          title?: string;
+          link?: string;
+        };
+        if (data.title) {
+          toast(data.title, {
+            description: data.type === "review_completed" ? "AI 审查已完成，等待处理" : "新通知",
+            action: data.link
+              ? {
+                  label: "查看",
+                  onClick: () => {
+                    window.location.href = data.link!;
+                  },
+                }
+              : undefined,
+          });
+        }
+      } catch {
+        /* 消息解析失败仅刷新 */
+      }
+    });
+    // EventSource 内置断线自动重连；onerror 无需额外逻辑
+    return () => {
+      clearInterval(t);
+      es.close();
+    };
   }, [load]);
 
   // 点击外部关闭
@@ -162,6 +204,37 @@ function NotificationPanel() {
     setItems((prev) => prev.map((i) => ({ ...i, read: true })));
     setUnread(0);
   }
+
+  /** 删除单条通知：后端返回最新未读数，回写角标 */
+  async function removeItem(id: number) {
+    setCtx(null);
+    try {
+      const res = await authFetch(`/api/notifications/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        const removed = items.find((i) => i.id === id);
+        setItems((prev) => prev.filter((i) => i.id !== id));
+        const d = await res.json().catch(() => null);
+        setUnread(typeof d?.unread === "number" ? d.unread : Math.max(0, unread - (removed && !removed.read ? 1 : 0)));
+      }
+    } catch {
+      /* 删除失败保持原状 */
+    }
+  }
+
+  // 点击外部 / 滚动 / 其它交互时关闭右键菜单
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtx(null);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("scroll", () => setCtx(null), true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("scroll", onDoc, true);
+    };
+  }, []);
+
+  const ctxItem = ctx ? items.find((i) => i.id === ctx.id) : null;
 
   return (
     <div ref={wrapRef} className="relative">
@@ -197,7 +270,7 @@ function NotificationPanel() {
               </button>
             )}
           </div>
-          <div className="max-h-80 overflow-auto">
+          <div className="min-h-[11.5rem] max-h-80 overflow-auto">
             {loading && items.length === 0 ? (
               <div className="flex items-center justify-center gap-2 py-10 text-[12.5px] text-face-3">
                 <Loader2 className="size-4 animate-spin" /> 加载中…
@@ -206,12 +279,22 @@ function NotificationPanel() {
               <div className="py-10 text-center text-[12.5px] text-face-3">暂无通知</div>
             ) : (
               items.map((n) => (
-                <button
+                <div
                   key={n.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => markRead(n.id, n.link)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setCtx({
+                      id: n.id,
+                      x: e.clientX - rect.left,
+                      y: e.clientY - rect.top,
+                    });
+                  }}
                   className={cn(
-                    "flex w-full cursor-pointer flex-col gap-0.5 border-b border-line px-3.5 py-3 text-left transition-colors last:border-b-0 hover:bg-ink-850",
+                    "relative flex w-full cursor-pointer flex-col gap-0.5 border-b border-line px-3.5 py-3 text-left transition-colors last:border-b-0 hover:bg-ink-850",
                     !n.read && "bg-[var(--amber-soft)]/60",
                   )}
                 >
@@ -223,7 +306,36 @@ function NotificationPanel() {
                     </span>
                   </div>
                   {n.body && <p className="line-clamp-1 text-[11.5px] text-face-3">{n.body}</p>}
-                </button>
+                  {ctx?.id === n.id && ctxItem && (
+                    <div
+                      ref={menuRef}
+                      style={{ left: ctx.x, top: ctx.y }}
+                      className="absolute z-50 w-28 overflow-hidden rounded-lg border border-border bg-card shadow-[var(--shadow-m)]"
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCtx(null);
+                          markRead(n.id, n.link);
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12px] text-face-1 transition-colors hover:bg-ink-850"
+                      >
+                        <Eye className="size-3.5" /> 查看
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeItem(n.id);
+                        }}
+                        className="flex w-full cursor-pointer items-center gap-2 border-t border-line bg-[var(--red-soft)]/40 px-3 py-2 text-left text-[12px] text-red transition-colors hover:bg-[var(--red-soft)]"
+                      >
+                        <Trash2 className="size-3.5" /> 删除
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))
             )}
           </div>
@@ -235,11 +347,19 @@ function NotificationPanel() {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
+  /** 全局搜索：独立下拉结果（仓库 + 按 PR title 匹配的 PR），不与仓库列表页搜索串数据 */
+  const [gq, setGq] = useState("");
+  const [gRepos, setGRepos] = useState<{ full_name: string; name: string; owner: string; description: string | null }[]>([]);
+  const [gPrs, setGPrs] = useState<{ repo: string; number: number; title: string; html_url: string; state?: string }[]>([]);
+  const [gOpen, setGOpen] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const collapseBtnRef = useRef<HTMLButtonElement>(null);
-  const { meta } = usePlatform();
+  const { meta, provider, ready } = usePlatform();
 
   useGSAP(
     () => {
@@ -261,20 +381,122 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { scope: shellRef }
   );
 
-  // 待审 PR 角标：动态统计审查队列中待处理的数量
+  // 待审 PR 角标：统计审查队列中待处理（PENDING）的数量
+  const refreshPending = useCallback(async () => {
+    try {
+      const r = await authFetch("/api/review/tasks");
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d?.jobs) return;
+      const n = (d.jobs as { decision: string }[]).filter(
+        (j) => j.decision === "PENDING",
+      ).length;
+      setPendingCount(n);
+    } catch {
+      /* 拉取失败保持旧值 */
+    }
+  }, []);
+
+  // 刷新时机：路由变化 + 审查决策处理后的自定义事件 + 轮询兜底（保证处理完即更新，不依赖手动导航）
   useEffect(() => {
+    refreshPending();
+    const onJobsChanged = () => {
+      // 审查决策处理后局部失效待审任务缓存，下次进入页面能拉到最新
+      invalidateCache("/api/review/tasks");
+      refreshPending();
+    };
+    window.addEventListener("review-jobs-changed", onJobsChanged);
+    const t = setInterval(refreshPending, 30000);
+    return () => {
+      window.removeEventListener("review-jobs-changed", onJobsChanged);
+      clearInterval(t);
+    };
+  }, [refreshPending, pathname]);
+
+  // 全局搜索：防抖拉取当前平台匹配仓库 + 仓库内的匹配 PR（按 PR title / PR 号），渲染独立下拉列表
+  useEffect(() => {
+    const kw = gq.trim();
+    if (!kw) {
+      setGRepos([]);
+      setGPrs([]);
+      setGLoading(false);
+      return;
+    }
+    if (!ready || (provider !== "github" && provider !== "gitee")) return;
     let cancelled = false;
-    authFetch("/api/review/tasks")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (cancelled || !d?.jobs) return;
-        setPendingCount(d.jobs.filter((j: { decision: string }) => j.decision === "PENDING").length);
-      })
-      .catch(() => {});
+    const t = setTimeout(async () => {
+      setGLoading(true);
+      try {
+        const [rr, pr] = await Promise.all([
+          // 仓库：模糊匹配仓库名/描述
+          authFetch(`/api/${provider}/repos?q=${encodeURIComponent(kw)}&pageSize=50`),
+          // PR：后端跨全仓库遍历（按 PR 标题 / PR 号），与仓库过滤解耦
+          authFetch(`/api/${provider}/search-pr?q=${encodeURIComponent(kw)}`),
+        ]);
+        if (cancelled) return;
+        setGRepos(rr.ok
+          ? ((await rr.json()).repos ?? []).map((x: any) => ({
+              full_name: x?.full_name,
+              name: x?.name,
+              owner: x?.full_name?.split("/")?.[0] ?? "",
+              description: x?.description ?? null,
+            }))
+          : []);
+        setGPrs(pr.ok ? (await pr.json()).prs ?? [] : []);
+      } catch {
+        if (!cancelled) {
+          setGRepos([]);
+          setGPrs([]);
+        }
+      } finally {
+        if (!cancelled) setGLoading(false);
+      }
+    }, 300);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
-  }, [pathname]);
+  }, [gq, provider, ready]);
+
+  // 点击全局搜索框外部时收起下拉
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) setGOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  function goToRepo(full: string) {
+    const [o, n] = full.split("/");
+    if (o && n) router.push(`/repo?owner=${encodeURIComponent(o)}&repo=${encodeURIComponent(n)}`);
+    setGOpen(false);
+    setGq("");
+  }
+
+  function onSearchSubmit() {
+    const kw = gq.trim();
+    if (!kw) return;
+    // 命中 PR → 打开第一个 PR；命中仓库 → 跳到第一个仓库；否则输入形如 owner/repo → 直接跳该仓库
+    const firstPr = gPrs[0];
+    if (firstPr?.html_url) {
+      window.open(firstPr.html_url, "_blank", "noopener");
+      setGOpen(false);
+      setGq("");
+      return;
+    }
+    const first = gRepos[0];
+    if (first?.full_name) {
+      goToRepo(first.full_name);
+      return;
+    }
+    const slashes = kw.split("/").filter(Boolean);
+    if (slashes.length === 2) {
+      router.push(`/repo?owner=${encodeURIComponent(slashes[0])}&repo=${encodeURIComponent(slashes[1])}`);
+      setGOpen(false);
+      setGq("");
+    }
+  }
 
   const activeKey =
     NAV.filter((n) => n.href).find((n) =>
@@ -337,15 +559,127 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* search */}
+        {/* search：独立下拉结果（仓库），与仓库列表页搜索各自独立 */}
         {!collapsed && (
-          <div className="relative mx-3 mb-2 shrink-0">
+          <div ref={searchBoxRef} className="relative mx-3 mb-2 shrink-0">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-face-3" />
             <input
+              value={gq}
+              onChange={(e) => {
+                setGq(e.target.value);
+                setGOpen(true);
+              }}
+              onFocus={() => setGOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setGOpen(false);
+                if (e.key === "Enter") onSearchSubmit();
+              }}
               placeholder="搜索仓库 / PR…"
               aria-label="全局搜索"
-              className="h-9 w-full rounded-md border border-border bg-ink-850 pl-9 pr-3 text-[13px] text-foreground placeholder:text-face-3 focus:border-amber focus:ring-[3px] focus:ring-amber/25 focus:outline-none"
+              aria-expanded={gOpen}
+              className="h-9 w-full rounded-md border border-border bg-ink-850 pr-8 pl-9 text-[13px] text-foreground placeholder:text-face-3 focus:border-amber focus:ring-[3px] focus:ring-amber/25 focus:outline-none"
             />
+            {gq && (
+              <button
+                type="button"
+                aria-label="清空全局搜索"
+                onClick={() => {
+                  setGq("");
+                  setGRepos([]);
+                  setGPrs([]);
+                }}
+                className="absolute top-1/2 right-2 grid size-5 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-face-3 transition-colors hover:bg-ink-800 hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+
+            {gOpen && gq.trim() && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1.5 overflow-hidden rounded-xl border border-border bg-card shadow-[var(--shadow-m)]">
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="text-[11px] font-semibold tracking-[0.08em] text-face-3 uppercase">
+                    搜索 · {meta.name}
+                  </span>
+                  <span className="text-[10.5px] text-face-3">
+                    {gLoading ? "搜索中…" : `PR ${gPrs.length} · 仓库 ${gRepos.length}`}
+                  </span>
+                </div>
+                <div className="max-h-72 overflow-auto">
+                  {gLoading && gPrs.length === 0 && gRepos.length === 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-4 text-[12px] text-face-3">
+                      <Loader2 className="size-3.5 animate-spin" /> 搜索中…
+                    </div>
+                  ) : gPrs.length === 0 && gRepos.length === 0 ? (
+                    <div className="px-3 py-4 text-[12px] text-face-3">未找到匹配的仓库或 PR</div>
+                  ) : (
+                    <>
+                      {gPrs.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[0.08em] text-face-3 uppercase">
+                          Pull Requests
+                        </div>
+                      )}
+                      {gPrs.map((p) => (
+                        <button
+                          key={`${p.repo}#${p.number}`}
+                          type="button"
+                          onClick={() => {
+                            window.open(p.html_url, "_blank", "noopener");
+                            setGOpen(false);
+                            setGq("");
+                          }}
+                          className="flex w-full cursor-pointer items-start gap-2.5 border-b border-line/60 px-3 py-2.5 text-left transition-colors hover:bg-ink-850"
+                        >
+                          <GitPullRequest className="mt-0.5 size-4 shrink-0 text-[var(--cyan)]" />
+                          <div className="min-w-0">
+                            <div className="truncate text-[12.5px] text-face-1">
+                              <span className="font-mono text-[var(--cyan)]">#{p.number}</span>{" "}
+                              {p.title}
+                              {p.state && p.state !== "open" && (
+                                <span className="ml-1.5 rounded px-1 py-px font-mono text-[9.5px] align-middle uppercase text-face-2 bg-ink-800">
+                                  {p.state === "merged" ? "已合并" : p.state === "closed" ? "已关闭" : p.state}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 truncate font-mono text-[11px] text-face-3">
+                              {p.repo}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+
+                      {gRepos.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[0.08em] text-face-3 uppercase">
+                          仓库
+                        </div>
+                      )}
+                      {gRepos.map((r) => (
+                        <button
+                          key={r.full_name}
+                          type="button"
+                          onClick={() => goToRepo(r.full_name)}
+                          className="flex w-full cursor-pointer items-start gap-2.5 border-b border-line/60 px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-ink-850"
+                        >
+                          <FolderGit2 className="mt-0.5 size-4 shrink-0 text-amber" />
+                          <div className="min-w-0">
+                            <div className="truncate font-mono text-[12.5px] text-face-1">
+                              {r.full_name}
+                            </div>
+                            {r.description && (
+                              <div className="mt-0.5 line-clamp-1 text-[11.5px] text-face-3">
+                                {r.description}
+                              </div>
+                            )}
+                          </div>
+                          <span className="ml-auto mt-1 shrink-0 text-[10px] text-face-3">
+                            {meta.name}
+                          </span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

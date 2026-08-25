@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   countUnreadNotifications,
+  deleteNotification,
   ensureNotificationTables,
-  markNotificationRead,
 } from "@/lib/db/mysql";
 import { resolveWebhookSession } from "@/lib/platform/webhook";
 
 export const runtime = "nodejs";
 
-/** 标记单条通知已读 */
-export async function POST(
+/** 删除单条通知（仅当前登录平台） */
+export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -22,7 +22,7 @@ export async function POST(
 
   try {
     await ensureNotificationTables();
-    await markNotificationRead(r.ctx.dbUser.id, id, r.provider);
+    await deleteNotification(r.ctx.dbUser.id, id, r.provider);
     const unread = await countUnreadNotifications(r.ctx.dbUser.id, r.provider);
     return NextResponse.json({ ok: true, unread });
   } catch (e) {

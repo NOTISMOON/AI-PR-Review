@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
   try {
     await ensureNotificationTables();
     const [items, unread] = await Promise.all([
-      listNotifications(r.ctx.dbUser.id, 30),
-      countUnreadNotifications(r.ctx.dbUser.id),
+      listNotifications(r.ctx.dbUser.id, r.provider, 30),
+      countUnreadNotifications(r.ctx.dbUser.id, r.provider),
     ]);
     return NextResponse.json({ items, unread });
   } catch (e) {
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
 
   try {
     await ensureNotificationTables();
-    await markAllNotificationsRead(r.ctx.dbUser.id);
-    const unread = await countUnreadNotifications(r.ctx.dbUser.id);
+    await markAllNotificationsRead(r.ctx.dbUser.id, r.provider);
+    const unread = await countUnreadNotifications(r.ctx.dbUser.id, r.provider);
     return NextResponse.json({ ok: true, unread });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
