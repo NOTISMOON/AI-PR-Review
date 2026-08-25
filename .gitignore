@@ -15,4 +15,4 @@ pnpm-debug.log*
 /src/generated/prisma
 .claude
 .codegraph/*
-
+.trae/*
