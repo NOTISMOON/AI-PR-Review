@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH } from "@/lib/auth/config";
+import { AUTH, requestUsesHttps } from "@/lib/auth/config";
 import { revokeSession } from "@/lib/auth/handlers";
 
 export const runtime = "nodejs";
 
-const cookie = (maxAge: number) => ({
+const cookie = (maxAge: number, secure: boolean) => ({
   httpOnly: true,
   sameSite: "lax" as const,
-  secure: AUTH.isSecure,
+  secure,
   path: "/",
   maxAge,
 });
@@ -19,8 +19,9 @@ async function doLogout(req: NextRequest) {
     status: 302,
     headers: { Location: "/login?logout=1" },
   });
-  res.cookies.set(AUTH.cookieName.access, "", cookie(0));
-  res.cookies.set(AUTH.cookieName.refresh, "", cookie(0));
+  const secure = requestUsesHttps(req);
+  res.cookies.set(AUTH.cookieName.access, "", cookie(0, secure));
+  res.cookies.set(AUTH.cookieName.refresh, "", cookie(0, secure));
   return res;
 }
 

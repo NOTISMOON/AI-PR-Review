@@ -1,8 +1,18 @@
+/** 认证配置：双 token（JWT access + refresh） */
+import type { NextRequest } from "next/server";
+
 /**
- * 认证配置：双 token（JWT access + refresh）
- * - access_token：短期 JWT，存 httpOnly cookie
- * - refresh_token：随机串，存 httpOnly cookie，且服务端在 Redis 存一份用于校验刷新
+ * 判断当前请求是否视为 HTTPS（决定 cookie 是否加 Secure）。
+ * 生产经由反代转发时看 X-Forwarded-Proto；否则看请求 URL 本身。
+ * 兼容内网穿透走 http（如 frp 暴露的 http:// 地址）时不应给 cookie 加 Secure，
+ * 否则浏览器会拒绝保存凭证，导致「登录不上」。
  */
+export function requestUsesHttps(req: NextRequest): boolean {
+  const fwd = req.headers.get("x-forwarded-proto");
+  if (fwd) return fwd.split(",")[0].trim() === "https";
+  return req.url.startsWith("https://");
+}
+
 export const AUTH = {
   /** JWT 签名密钥（生产务必用环境变量覆盖） */
   jwtSecret: process.env.AUTH_JWT_SECRET || process.env.SECRET_KEY || "dev-jwt-secret-please-change",

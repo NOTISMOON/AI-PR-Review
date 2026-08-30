@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH } from "./config";
+import { AUTH, requestUsesHttps } from "./config";
 import { signAccessToken, type AuthUser, type OAuthProvider } from "./jwt";
 import { getRequestOrigin } from "@/lib/request";
 import {
@@ -20,10 +20,10 @@ import {
 import { upsertLoginUser, getPlatformUser, upsertInstallation } from "@/lib/db/mysql";
 import { listInstallations } from "@/lib/github/user-client";
 
-const cookie = (maxAge: number) => ({
+const cookie = (maxAge: number, secure: boolean) => ({
   httpOnly: true,
   sameSite: "lax" as const,
-  secure: AUTH.isSecure,
+  secure,
   path: "/",
   maxAge,
 });
@@ -42,8 +42,9 @@ export async function startOAuth(provider: OAuthProvider, req: NextRequest) {
   const url = authorizeUrl(provider, redirectUri, state);
 
   const res = NextResponse.redirect(url);
-  res.cookies.set(AUTH.cookieName.state, state, cookie(600));
-  res.cookies.set(AUTH.cookieName.provider, provider, cookie(600));
+  const secure = requestUsesHttps(req);
+  res.cookies.set(AUTH.cookieName.state, state, cookie(600, secure));
+  res.cookies.set(AUTH.cookieName.provider, provider, cookie(600, secure));
   return res;
 }
 
@@ -59,8 +60,9 @@ export async function oauthCallback(provider: OAuthProvider, req: NextRequest) {
       status: 302,
       headers: { Location: `/login?error=${reason}&provider=${provider}` },
     });
-    res.cookies.set(AUTH.cookieName.state, "", cookie(0));
-    res.cookies.set(AUTH.cookieName.provider, "", cookie(0));
+    const secure = requestUsesHttps(req);
+    res.cookies.set(AUTH.cookieName.state, "", cookie(0, secure));
+    res.cookies.set(AUTH.cookieName.provider, "", cookie(0, secure));
     return res;
   };
 
@@ -129,10 +131,11 @@ export async function oauthCallback(provider: OAuthProvider, req: NextRequest) {
       status: 302,
       headers: { Location: `/dashboard?provider=${provider}` },
     });
-    res.cookies.set(AUTH.cookieName.access, access, cookie(AUTH.accessTtlSec));
-    res.cookies.set(AUTH.cookieName.refresh, refresh, cookie(AUTH.refreshTtlSec));
-    res.cookies.set(AUTH.cookieName.state, "", cookie(0));
-    res.cookies.set(AUTH.cookieName.provider, "", cookie(0));
+    const secure = requestUsesHttps(req);
+    res.cookies.set(AUTH.cookieName.access, access, cookie(AUTH.accessTtlSec, secure));
+    res.cookies.set(AUTH.cookieName.refresh, refresh, cookie(AUTH.refreshTtlSec, secure));
+    res.cookies.set(AUTH.cookieName.state, "", cookie(0, secure));
+    res.cookies.set(AUTH.cookieName.provider, "", cookie(0, secure));
     return res;
   } catch (err) {
     console.error(`[auth] OAuth callback failed (${provider}):`, err);

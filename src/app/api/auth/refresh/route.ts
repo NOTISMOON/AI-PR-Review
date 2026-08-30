@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH } from "@/lib/auth/config";
+import { AUTH, requestUsesHttps } from "@/lib/auth/config";
 import { refreshAccessToken } from "@/lib/auth/handlers";
 
 export const runtime = "nodejs";
 
-const cookie = (maxAge: number) => ({
+const cookie = (maxAge: number, secure: boolean) => ({
   httpOnly: true,
   sameSite: "lax" as const,
-  secure: AUTH.isSecure,
+  secure,
   path: "/",
   maxAge,
 });
@@ -19,8 +19,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_refresh" }, { status: 401 });
   }
 
+  const secure = requestUsesHttps(req);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(AUTH.cookieName.access, result.access, cookie(AUTH.accessTtlSec));
-  res.cookies.set(AUTH.cookieName.refresh, result.refresh, cookie(AUTH.refreshTtlSec));
+  res.cookies.set(AUTH.cookieName.access, result.access, cookie(AUTH.accessTtlSec, secure));
+  res.cookies.set(AUTH.cookieName.refresh, result.refresh, cookie(AUTH.refreshTtlSec, secure));
   return res;
 }
