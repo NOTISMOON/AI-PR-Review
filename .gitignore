@@ -23,3 +23,4 @@ pnpm-debug.log*
 # 构建产物与 npm 锁文件（项目使用 pnpm，npm 锁文件不入库）
 tsconfig.tsbuildinfo
 package-lock.json
+ssl/

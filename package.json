@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:prod": "next start -H 0.0.0.0",
+    "start:worker": "tsx src/scripts/review-worker.ts",
     "lint": "next lint",
     "review-worker": "tsx src/scripts/review-worker.ts",
     "db:generate": "prisma generate",

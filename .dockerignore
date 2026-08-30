@@ -1,0 +1,27 @@
+# 构建上下文排除：避免把本地产物/敏感文件复制进镜像
+node_modules
+.next
+out
+.git
+.gitignore
+Dockerfile
+.dockerignore
+
+# 密钥与本地配置一律不入镜像
+.env
+.env.*
+!.env.example
+.secrets
+
+# 文档/原型/临时文件（不属于运行产物）
+docs
+prototype
+/scripts
+/review-once.ts
+/check-state.cjs
+/fix-db.cjs
+README.md
+*.log
+tsconfig.tsbuildinfo
+package-lock.json
+pnpm-lock-debug.log*
