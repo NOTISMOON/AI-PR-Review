@@ -62,10 +62,19 @@ export const PLATFORM_META: Record<Platform, {
   },
 };
 
+/** 登录后由 /api/auth/me 校正出的真实用户身份（侧边栏左下角展示用） */
+export interface AuthUserInfo {
+  login: string;
+  name: string;
+  avatar: string;
+}
+
 interface PlatformCtxValue {
   provider: Platform;
   setProvider: (p: Platform) => void;
   meta: (typeof PLATFORM_META)[Platform];
+  /** 真实登录用户（/api/auth/me 校正后填充；未登录/未就绪时为 null） */
+  user: AuthUserInfo | null;
   /** 视角是否已用真实登录身份（/api/auth/me）校正过；未就绪前平台数据请求应跳过 */
   ready: boolean;
 }
@@ -74,12 +83,14 @@ const PlatformCtx = createContext<PlatformCtxValue>({
   provider: "github",
   setProvider: () => {},
   meta: PLATFORM_META.github,
+  user: null,
   ready: false,
 });
 
 export function PlatformProvider({ children }: { children: ReactNode }) {
   // SSR/客户端首次一致：先给默认值，挂载后再按 URL/localStorage 校正，避免 hydration 错乱
   const [provider, setProviderState] = useState<Platform>("github");
+  const [user, setUser] = useState<AuthUserInfo | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -96,6 +107,12 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
             /* ignore */
           }
           setProviderState(u.provider);
+          // 真实登录用户信息（login/name/avatar），用于侧边栏左下角等展示，替换占位 meta
+          setUser({
+            login: u.login || "",
+            name: u.name || u.login || "",
+            avatar: u.avatar || "",
+          });
         }
       })
       .catch(() => {
@@ -114,7 +131,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <PlatformCtx.Provider value={{ provider, setProvider, meta: PLATFORM_META[provider], ready }}>
+    <PlatformCtx.Provider value={{ provider, setProvider, meta: PLATFORM_META[provider], user, ready }}>
       {children}
     </PlatformCtx.Provider>
   );

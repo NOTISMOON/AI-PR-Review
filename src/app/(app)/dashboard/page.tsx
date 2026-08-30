@@ -11,6 +11,7 @@ import {
   RadioTower,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { AnimatedSelect } from "@/app/components/animated-select";
 import { CountUp, Tilt, SplitTitle } from "@/app/components/motion";
 import { usePlatform } from "@/app/components/platform";
 import { authFetch } from "@/lib/client/auth-fetch";
@@ -265,7 +266,7 @@ export default function DashboardPage() {
 
       {/* ===== 热力图 + 语言（3:1 并排） ===== */}
       <div className="mb-5 grid gap-4 md:grid-cols-[3fr_1fr]">
-        <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-6">
           <div className="mb-4 flex items-center justify-between">
             <span className="font-display text-[15px] font-semibold">提交活跃度</span>
             <span className="inline-flex items-center gap-1.5 text-[11.5px] text-face-3">
@@ -275,19 +276,16 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="mb-3 flex items-center gap-2">
-            <select
-              value={year ?? ""}
-              onChange={(e) => setYear(e.target.value ? Number(e.target.value) : undefined)}
-              aria-label="选择贡献年份"
-              className="h-7 cursor-pointer rounded-full border border-line bg-ink-850 px-2 text-[12px] text-face-2 outline-none focus:border-amber"
-            >
-              <option value="">近 12 个月</option>
-              {years.map((y) => (
-                <option key={y} value={y} className="bg-card">
-                  {y}
-                </option>
-              ))}
-            </select>
+            <AnimatedSelect
+              value={year ? String(year) : ""}
+              onChange={(v) => setYear(v ? Number(v) : undefined)}
+              ariaLabel="选择贡献年份"
+              triggerClassName="h-7 rounded-full px-3 text-[12px]"
+              options={[
+                { value: "", label: "近 12 个月" },
+                ...years.map((y) => ({ value: String(y), label: `${y}` })),
+              ]}
+            />
             {heat && <span className="text-[12px] text-face-3">{heat.total} commit</span>}
           </div>
           <div className="overflow-x-auto pb-1">
@@ -296,7 +294,7 @@ export default function DashboardPage() {
           <div className="mt-3 text-[12.5px] text-face-3">◆ {live?.topRepos?.[0] ? `最佳仓库 ${live.topRepos[0].name}` : "最佳仓库 暂无数据"}</div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-5">
           <span className="font-display text-[14px] font-semibold">语言占比</span>
           <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded" ref={langBarRef}>
             {langSegs.map((b, i) => (

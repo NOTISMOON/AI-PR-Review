@@ -8,6 +8,7 @@ import { Input } from "@/app/components/ui/input";
 import { Switch } from "@/app/components/ui/switch";
 import { cn } from "@/app/components/ui/utils";
 import { Entrance, SplitTitle } from "@/app/components/motion";
+import { AnimatedSelect } from "@/app/components/animated-select";
 import { usePlatform } from "@/app/components/platform";
 import { authFetch } from "@/lib/client/auth-fetch";
 
@@ -258,19 +259,16 @@ export default function SettingsPage() {
       <section className="rounded-xl border border-border bg-card p-5">
         <SectionHead icon={<Sparkles className="size-[18px]" />} title="AI 审查" hint="审查所用的模型与输出偏好（模型为空则自动选择）" />
         <FormRow title="审查模型" desc="用于生成结构化审查评论的路由模型">
-          <select
-            aria-label="选择模型"
+          <AnimatedSelect
             value={ai.model}
-            onChange={(e) => setAi((prev) => ({ ...prev, model: e.target.value }))}
-            className="h-9 cursor-pointer appearance-none rounded-md border border-line bg-ink-850 px-3 pr-7 text-[13px] text-face-1 outline-none focus:border-amber focus:ring-[3px] focus:ring-amber/25"
-          >
-            <option value="" className="bg-card text-face-1">自动选择</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id} className="bg-card text-face-1">
-                {m.name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setAi((prev) => ({ ...prev, model: v }))}
+            ariaLabel="选择模型"
+            triggerClassName="h-9 w-52 px-3 text-[13px]"
+            options={[
+              { value: "", label: "自动选择" },
+              ...models.map((m) => ({ value: m.id, label: m.name })),
+            ]}
+          />
         </FormRow>
         <FormRow title="创作温度" desc="控制评论的随机性与创造力">
           <span className="flex items-center gap-3">

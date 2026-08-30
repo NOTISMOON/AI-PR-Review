@@ -39,13 +39,9 @@ export default function HomePage() {
           <nav className="hidden items-center gap-1 md:flex" aria-label="主导航">
             <a href="#how" className="rounded-md px-3 py-2 text-[13.5px] font-medium text-face-2 hover:text-foreground">如何工作</a>
             <a href="#insights" className="rounded-md px-3 py-2 text-[13.5px] font-medium text-face-2 hover:text-foreground">用户洞察</a>
-            <a href="#code" className="rounded-md px-3 py-2 text-[13.5px] font-medium text-face-2 hover:text-foreground">代码浏览</a>
             <a href="#review" className="rounded-md px-3 py-2 text-[13.5px] font-medium text-face-2 hover:text-foreground">自动审查</a>
           </nav>
           <div className="ml-auto flex items-center gap-2.5">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/dashboard">演示面板</Link>
-            </Button>
             <Button asChild size="sm">
               <Link href="/login">登录</Link>
             </Button>

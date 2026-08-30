@@ -359,7 +359,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const collapseBtnRef = useRef<HTMLButtonElement>(null);
-  const { meta, provider, ready } = usePlatform();
+  const { meta, provider, ready, user } = usePlatform();
+
+  /** 折叠/展开侧边栏（按钮旋转反馈；收缩态下展开按钮常驻可见） */
+  const toggleCollapse = () => {
+    setCollapsed((prev) => {
+      if (collapseBtnRef.current) {
+        gsap.to(collapseBtnRef.current, {
+          rotation: prev ? 0 : 180,
+          duration: 0.3,
+          ease: "power2.inOut",
+        });
+      }
+      return !prev;
+    });
+  };
 
   useGSAP(
     () => {
@@ -522,10 +536,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className={cn(
             "flex shrink-0 items-center gap-2.5",
-            collapsed ? "px-4 py-5" : "px-4.5 py-5"
+            collapsed ? "flex-col gap-3 px-2 pt-5 pb-4" : "px-4.5 py-5"
           )}
         >
-          <span className={collapsed ? "mx-auto" : ""}>
+          <span>
             <BrandMark />
           </span>
           {!collapsed && (
@@ -540,24 +554,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               ref={collapseBtnRef}
               aria-label="折叠侧边栏"
-              onClick={() =>
-                setCollapsed((prev) => {
-                  if (collapseBtnRef.current) {
-                    gsap.to(collapseBtnRef.current, {
-                      rotation: prev ? 0 : 180,
-                      duration: 0.3,
-                      ease: "power2.inOut",
-                    });
-                  }
-                  return !prev;
-                })
-              }
+              onClick={toggleCollapse}
               className="ml-auto grid size-8 shrink-0 cursor-pointer place-items-center rounded-md border border-border text-face-2 transition-colors hover:border-amber/60 hover:bg-amber/10 hover:text-amber"
             >
               <PanelLeftClose className="size-4" />
             </button>
           )}
         </div>
+
+        {/* 收缩态下的展开按钮：常驻顶部 logo 下方，保证折叠后可重新展开 */}
+        {collapsed && (
+          <div className="mb-2 flex shrink-0 justify-center">
+            <button
+              ref={collapseBtnRef}
+              aria-label="展开侧边栏"
+              onClick={toggleCollapse}
+              className="grid size-8 cursor-pointer place-items-center rounded-md border border-border text-face-2 transition-colors hover:border-amber/60 hover:bg-amber/10 hover:text-amber"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+          </div>
+        )}
 
         {/* search：独立下拉结果（仓库），与仓库列表页搜索各自独立 */}
         {!collapsed && (
@@ -723,7 +740,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
-        {/* foot user */}
+        {/* foot user：显示真实登录用户（来自 /api/auth/me），未校正前回退平台占位 */}
         <div className="shrink-0 border-t border-border p-3">
           <div
             className={cn(
@@ -734,16 +751,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="size-8 shrink-0 overflow-hidden rounded-full border-2 border-line-strong">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={meta.avatar}
-                alt={meta.user}
+                src={user?.avatar || meta.avatar}
+                alt={user?.name || meta.user}
                 className="size-full object-cover"
               />
             </span>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold">{meta.user}</div>
+                <div className="truncate text-[13px] font-semibold">
+                  {user?.name || user?.login || meta.user}
+                </div>
                 <div className="truncate text-[11.5px] text-face-3">
-                  {meta.authLabel}
+                  {user ? `${meta.name} · 已连接` : meta.authLabel}
                 </div>
               </div>
             )}

@@ -79,18 +79,24 @@ export async function POST(
         const bot = await getBotToken(owner, repo);
         if (bot.ok) {
           token = bot.token;
-        } else if (bot.reason === "not_configured" || bot.reason === "key_missing") {
-          return NextResponse.json(
-            { error: "审批自己的 PR 需配置 GitHub App（当前平台未配置 App 或私钥）" },
-            { status: 502 },
-          );
-        } else if (bot.reason === "not_installed") {
-          return NextResponse.json(
-            { error: bot.message || "审批自己的 PR 需先安装 GitHub App 到该仓库" },
-            { status: 502 },
-          );
         } else {
-          return NextResponse.json({ error: bot.message || "GitHub App 不可用" }, { status: 502 });
+          // 项目为 strict:false，对象字面量联合在 else 里不做判别收窄，
+          // 故用可选字段断言读取失败原因（避免 TS2339：另一分支无该属性）
+          const reason = (bot as { reason?: string }).reason;
+          const message = (bot as { message?: string }).message;
+          if (reason === "not_configured" || reason === "key_missing") {
+            return NextResponse.json(
+              { error: "审批自己的 PR 需配置 GitHub App（当前平台未配置 App 或私钥）" },
+              { status: 502 },
+            );
+          }
+          if (reason === "not_installed") {
+            return NextResponse.json(
+              { error: message || "审批自己的 PR 需先安装 GitHub App 到该仓库" },
+              { status: 502 },
+            );
+          }
+          return NextResponse.json({ error: message || "GitHub App 不可用" }, { status: 502 });
         }
       }
 

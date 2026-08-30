@@ -15,6 +15,7 @@ import {
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Entrance, SplitTitle } from "@/app/components/motion";
+import { AnimatedSelect } from "@/app/components/animated-select";
 import { usePlatform } from "@/app/components/platform";
 import { cachedFetch } from "@/lib/client/data-cache";
 
@@ -206,7 +207,7 @@ function timeAgo(iso: string): string {
 
 export default function RepoPage() {
   const { provider, ready } = usePlatform();
-  const [repos, setRepos] = useState<{ full_name: string; name: string }[]>([]);
+  const [repos, setRepos] = useState<{ full_name: string; name: string; status?: string }[]>([]);
   const [sel, setSel] = useState<{ owner: string; repo: string }>({ owner: "", repo: "" });
 
   const [branches, setBranches] = useState<{ name: string }[]>([]);
@@ -258,13 +259,17 @@ export default function RepoPage() {
     const q = new URLSearchParams(window.location.search);
     const qo = q.get("owner");
     const qr = q.get("repo");
-    cachedFetch<{ repos?: any[] }>(`/api/${provider}/repos`, 30)
+    // 全量仓库：下拉框需展示所有仓库，显式传 pageSize=50 规避 repos 接口默认分页 6 个
+    cachedFetch<{ repos?: any[] }>(`/api/${provider}/repos?pageSize=50`, 30)
       .then((d) => {
         if (cancelled || !d) return;
-        const list: { full_name: string; name: string }[] = (d.repos ?? []).map((x: any) => ({
-          full_name: x.full_name,
-          name: x.name,
-        }));
+        const list: { full_name: string; name: string; status?: string }[] = (d.repos ?? []).map(
+          (x: any) => ({
+            full_name: x.full_name,
+            name: x.name,
+            status: x.status,
+          }),
+        );
         setRepos(list);
         if (qo && qr) setSel({ owner: qo, repo: qr });
         else if (list.length) {
@@ -393,6 +398,31 @@ export default function RepoPage() {
   const fileLines = useMemo(() => (file ? file.content.split("\n") : []), [file]);
   const lang = file ? languageOf(file.path) : "text";
   const crumbPath = activePath.split("/").filter(Boolean);
+  /** 当前选中仓库的自动审查真实状态（由 repos 接口按开关+待审任务算好） */
+  const autoStatus =
+    sel.owner && sel.repo
+      ? repos.find((r) => r.full_name === `${sel.owner}/${sel.repo}`)?.status
+      : undefined;
+  const autoBadge =
+    autoStatus === "reviewing"
+      ? {
+          icon: <GitCommitHorizontal className="size-3.5 animate-pulse" />,
+          text: "审查中",
+          cls: "bg-[var(--amber-soft)] text-[var(--amber)]",
+        }
+      : autoStatus === "enabled"
+        ? {
+            icon: <GitCommitHorizontal className="size-3.5" />,
+            text: "自动审查已启用",
+            cls: "bg-[var(--green-soft)] text-[var(--green)]",
+          }
+        : autoStatus === "off"
+          ? {
+              icon: <GitCommitHorizontal className="size-3.5" />,
+              text: "自动审查未开启",
+              cls: "bg-ink-800 text-face-2",
+            }
+          : null;
 
   return (
     <Entrance className="space-y-5">
@@ -427,38 +457,29 @@ export default function RepoPage() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2.5">
-          <select
+          <AnimatedSelect
             value={sel.owner && sel.repo ? `${sel.owner}/${sel.repo}` : ""}
-            onChange={(e) => switchTo(e.target.value)}
-            aria-label="选择仓库"
-            className="h-8 cursor-pointer rounded-md border border-line bg-ink-850 px-2 font-mono text-[12.5px] text-face-1 outline-none focus:border-amber"
-          >
-            {repos.length === 0 && <option value="">仓库加载中…</option>}
-            {repos.map((r) => (
-              <option key={r.full_name} value={r.full_name} className="bg-card">
-                {r.full_name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => switchTo(v)}
+            options={repos.map((r) => ({ value: r.full_name, label: r.full_name }))}
+            placeholder={repos.length === 0 ? "仓库加载中…" : "选择仓库"}
+            ariaLabel="选择仓库"
+            maxHeight="max-h-72"
+            triggerClassName="w-52"
+          />
 
           {/* 分支切换 */}
-          <label className="relative inline-flex items-center">
-            <GitBranch className="pointer-events-none absolute left-2.5 size-3.5 text-[var(--amber)]" />
-            <select
-              value={ref}
-              onChange={(e) => changeBranch(e.target.value)}
-              aria-label="切换分支"
-              className="h-8 cursor-pointer appearance-none rounded-md border border-line-strong bg-ink-850 pr-7 pl-8 font-mono text-[12.5px] text-face-1 outline-none focus:border-amber"
-            >
-              {branches.length === 0 && <option value={ref || defaultBranch}>{ref || defaultBranch}</option>}
-              {branches.map((b) => (
-                <option key={b.name} value={b.name} className="bg-card">
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 size-3.5 text-face-3" />
-          </label>
+          <AnimatedSelect
+            value={ref}
+            onChange={(v) => changeBranch(v)}
+            options={branches.map((b) => ({ value: b.name, label: b.name }))}
+            placeholder={ref || defaultBranch}
+            ariaLabel="切换分支"
+            icon={<GitBranch className="size-3.5" />}
+            maxHeight="max-h-64"
+            align="end"
+            triggerClassName="w-40"
+            menuClassName="min-w-48"
+          />
         </div>
       </div>
 
@@ -481,13 +502,18 @@ export default function RepoPage() {
               {latestCommit.author} · {latestCommit.sha} · {timeAgo(latestCommit.date)}
             </div>
           </div>
-          <Badge
-            variant="secondary"
-            className="ml-auto shrink-0 rounded-full border-transparent bg-[var(--amber-soft)] px-2.5 text-[var(--amber)]"
-          >
-            <GitCommitHorizontal className="size-3.5" />
-            自动审查已启用
-          </Badge>
+          {autoBadge && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                "ml-auto shrink-0 rounded-full border-transparent px-2.5",
+                autoBadge.cls,
+              )}
+            >
+              {autoBadge.icon}
+              {autoBadge.text}
+            </Badge>
+          )}
         </div>
       ) : null}
 

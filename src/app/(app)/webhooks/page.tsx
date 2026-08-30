@@ -7,6 +7,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { cn } from "@/app/components/ui/utils";
 import { Entrance, SplitTitle } from "@/app/components/motion";
 import { usePlatform, type Platform } from "@/app/components/platform";
+import { AnimatedSelect } from "@/app/components/animated-select";
 import { authFetch } from "@/lib/client/auth-fetch";
 
 /* ── 事件 / 规则展示元数据（开关状态来自接口配置） ── */
@@ -173,7 +174,7 @@ export default function WebhooksPage() {
       const [cfgRes, logsRes, reposRes] = await Promise.all([
         authFetch("/api/webhook/config"),
         authFetch("/api/webhook/logs"),
-        authFetch(`/api/${provider}/repos`),
+        authFetch(`/api/${provider}/repos?pageSize=50`),
       ]);
       if (cfgRes.ok) {
         const d: WebhookConfig = await cfgRes.json();
@@ -457,19 +458,15 @@ export default function WebhooksPage() {
           需要在平台具备仓库管理权限。
         </p>
         <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
-          <select
+          <AnimatedSelect
             value={selectedRepo}
-            onChange={(e) => setSelectedRepo(e.target.value)}
-            aria-label="选择要配置的仓库"
-            className="h-8 min-w-[220px] cursor-pointer rounded-md border border-line bg-ink-850 px-2 font-mono text-[12.5px] text-face-1 outline-none focus:border-amber"
-          >
-            {repos.length === 0 && <option value="">仓库加载中…</option>}
-            {repos.map((r) => (
-              <option key={r.full_name} value={r.full_name} className="bg-card">
-                {r.full_name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setSelectedRepo(v)}
+            ariaLabel="选择要配置的仓库"
+            triggerClassName="h-8 w-56 px-3"
+            maxHeight="max-h-72"
+            options={repos.map((r) => ({ value: r.full_name, label: r.full_name }))}
+            placeholder={repos.length === 0 ? "仓库加载中…" : "选择仓库"}
+          />
           <button
             type="button"
             onClick={createHook}
