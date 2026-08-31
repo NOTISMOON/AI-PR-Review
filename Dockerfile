@@ -5,20 +5,18 @@
 # 需运行时通过 -e / --env-file 注入：REDIS_URL、PR_MYSQL_URL、RABBITMQ_URL、
 # JWT 相关密钥、模型 API Key 等（镜像内不写死任何密钥）。
 #
-# 网络：默认走 npmmirror（国内镜像），可通过 --build-arg NPM_REGISTRY / PRISMA_ENGINES_MIRROR 切换
+# 网络：默认走 npmmirror（国内镜像），可通过 --build-arg NPM_REGISTRY 切换
 #   docker build --build-arg NPM_REGISTRY=https://registry.npmjs.org ...
 # ─────────────────────────────────────────────────────────────
 
 # 1) 基础镜像：Node + pnpm（corepack），并配置镜像与网络超时
 FROM node:22-alpine AS base
 ARG NPM_REGISTRY=https://registry.npmmirror.com
-ARG PRISMA_ENGINES_MIRROR=https://npmmirror.com/mirrors/prisma
 # PNPM_HOME 单独一条 ENV，避免在同一条 ENV 内自引用导致 UndefinedVar
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH" \
     npm_config_registry="$NPM_REGISTRY" \
     COREPACK_NPM_REGISTRY="$NPM_REGISTRY" \
-    PRISMA_ENGINES_MIRROR="$PRISMA_ENGINES_MIRROR" \
     npm_config_fetch_timeout="600000" \
     npm_config_fetch_retries="6" \
     npm_config_network_concurrency="8" \
@@ -26,17 +24,16 @@ ENV PATH="$PNPM_HOME:$PATH" \
 RUN corepack enable
 WORKDIR /app
 
-# 2) 依赖层：仅安装，不触发 postinstall（prisma schema 尚未就位）
+# 2) 依赖层：仅安装
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# 3) 构建层：复制源码 → 生成 Prisma Client → 构建 Next
+# 3) 构建层：复制源码 → 构建 Next
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm exec prisma generate \
-    && pnpm build
+RUN pnpm build
 
 # 4) 运行层：含全部依赖（含 tsx，供 worker 直接执行 ts）+ nginx（负载均衡入口）
 FROM base AS runner

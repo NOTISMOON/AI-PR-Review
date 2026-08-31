@@ -5,7 +5,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-15+-black)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-latest-blue)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.1.12-38bdf8)](https://tailwindcss.com/)
-[![Prisma](https://img.shields.io/badge/Prisma-7.8.0-2d3748)](https://www.prisma.io/)
+[![MySQL](https://img.shields.io/badge/MySQL-8+-4479a1)](https://www.mysql.com/)
 
 ## 📹 项目演示
 
@@ -89,9 +89,9 @@
 
 - **Node.js** 18+
 - **pnpm** 8+
-- **数据库**：PostgreSQL 14+（已内置备选连接，可选配置）
+- **MySQL** 8+（业务库；未配置时本地/原型运行会跳过落库，但登录鉴权等功能需配置）
 
-### 一键启动（推荐）
+### 快速启动
 
 ```bash
 # 1. 克隆项目
@@ -101,38 +101,23 @@ cd AI-PR-Review
 # 2. 安装依赖
 pnpm install
 
-# 3. 初始化数据库（使用内置备选连接）
-pnpm db:migrate
+# 3. 配置环境变量（业务库统一为 MySQL）
+# 创建 .env，参考 .env.example 填写：
+#   PR_MYSQL_URL="mysql://root:pass@127.0.0.1:3306/prreview_db"
+#   + OAuth/JWT/Redis/RabbitMQ 相关密钥
 
-# 4. 生成 Prisma 客户端
-pnpm db:generate
-
-# 5. 启动开发服务器
+# 4. 启动开发服务器
 pnpm dev
 ```
 
 访问 http://localhost:3000 即可开始使用！
 
-### 自定义配置（可选）
-
-如需使用自己的数据库，创建 `.env` 文件：
-
-```bash
-# 数据库连接（可选，未配置时使用内置备选连接）
-DATABASE_URL="postgresql://user:password@localhost:5432/ai_code_review"
-
-# AI 模型配置（在 UI 中配置，无需环境变量）
-```
+> 表结构（user / ai_review_job / review_issue / webhook_* / notification / user_setting / contribution_summary 等）
+> 由代码在运行时幂等创建（`src/lib/db/mysql.ts` 的 `ensure*Tables()`），无需手动执行迁移。
 
 ### 生产部署
 
-```bash
-# 构建生产版本
-pnpm build
-
-# 启动生产服务器
-pnpm start
-```
+Docker 单容器多进程（nginx 负载均衡 + Next ×3 + worker）部署方式见 [docs/部署踩坑与多进程部署.md](docs/部署踩坑与多进程部署.md)。
 
 ## 📖 使用指南
 
@@ -182,9 +167,9 @@ pnpm start
 |------|------|------|
 | **Node.js** | 18+ | 运行时环境 |
 | **Next.js API Routes** | latest | RESTful API |
-| **Prisma** | 7.8.0 | ORM 框架 |
-| **PostgreSQL** | 14+ | 关系型数据库 |
-| **pg** | 8.21.0 | PostgreSQL 驱动 |
+| **mysql2** | 3.14.0 | MySQL 数据访问（业务库） |
+| **MySQL** | 8+ | 关系型数据库（统一业务库） |
+| **Redis** | 7+ | 缓存 / refresh_token / 通知 SSE 广播 |
 
 ### AI 集成
 
@@ -199,7 +184,7 @@ pnpm start
 - **包管理器**：pnpm 8+
 - **代码规范**：ESLint
 - **类型检查**：TypeScript
-- **数据库管理**：Prisma Studio
+- **数据库管理**：MySQL（表结构由代码幂等创建）
 
 ## 🧠 系统设计思路
 
@@ -417,14 +402,15 @@ src/
 │   │   ├── quality.ts            # 质量检查
 │   │   └── consistency.ts        # 一致性检查
 │   ├── cache/                    # 缓存系统
-│   │   └── memory.ts             # 内存缓存
-│   ├── github.ts                 # GitHub API
-│   ├── local-history.ts          # 本地历史存储
-│   ├── prisma.ts                 # Prisma 客户端
-│   └── analysis-store.ts         # 分析存储
+│   │   ├── memory.ts             # 内存缓存
+│   │   └── redis.ts              # Redis 缓存
+│   ├── db/
+│   │   └── mysql.ts              # MySQL 数据访问（幂等建表 / 数据读写）
+│   ├── queue/
+│   │   └── rabbitmq.ts           # RabbitMQ 审查任务队列
+│   └── github.ts                 # GitHub API
 ├── types/                        # TypeScript 类型定义
 │   └── analysis.ts               # 核心类型
-└── generated/                    # 生成的代码（Prisma）
 ```
 
 ## 🔧 可用脚本
@@ -435,16 +421,7 @@ pnpm dev              # 启动开发服务器
 pnpm build            # 构建生产版本
 pnpm start            # 启动生产服务器
 pnpm lint             # 代码检查
-
-# 数据库
-pnpm db:generate      # 生成 Prisma 客户端
-pnpm db:migrate       # 运行数据库迁移（开发）
-pnpm db:migrate:prod  # 运行数据库迁移（生产）
-pnpm db:push          # 推送 schema 到数据库
-pnpm db:pull          # 从数据库拉取 schema
-pnpm db:reset         # 重置数据库
-pnpm db:studio        # 打开 Prisma Studio
-pnpm db:seed          # 填充种子数据
+pnpm review-worker    # 启动后台审查消费者（RabbitMQ）
 ```
 
 ## 📊 项目亮点
@@ -460,7 +437,7 @@ pnpm db:seed          # 填充种子数据
 ### 工程实践
 
 1. **类型安全**：全栈 TypeScript，端到端类型检查
-2. **数据持久化**：Prisma ORM + PostgreSQL + 本地浏览器双重历史存储
+2. **数据持久化**：MySQL + Redis + 本地浏览器双重历史存储
 3. **性能优化**：智能缓存、Token 预算管理、流式响应
 4. **用户体验**：响应式设计、实时反馈、一键启动
 
