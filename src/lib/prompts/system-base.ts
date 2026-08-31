@@ -159,7 +159,7 @@ export const BASE_SYSTEM_PROMPT = `你是一名资深的全栈代码审查专家
 - ❌ 不要使用空字符串 ""
 - ❌ 不要使用 0 作为 line 的值（必须是实际的行号）
 - ❌ 不要使用 null 或 undefined
-- ❌ file 字段必须是实际的文件路径，如 "src/lib/prisma.ts"
+- ❌ file 字段必须是实际的文件路径，如 "src/lib/db/mysql.ts"
 - ❌ code 字段必须包含实际的代码片段，不能为空
 
 **重要：JSON 格式要求**

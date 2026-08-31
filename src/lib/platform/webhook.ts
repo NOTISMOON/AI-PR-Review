@@ -365,7 +365,6 @@ async function triggerReviewFromWebhook(provider: OAuthProvider, ownerId: number
         maxComments,
         diffOnly,
       },
-      null,
     );
     console.log(`[webhook] 审查完成 ${fullName}#${prNumber}`);
   } catch (e) {

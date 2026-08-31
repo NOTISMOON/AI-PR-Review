@@ -27,7 +27,6 @@ async function main() {
       platform: "github",
       riskThreshold: "默认",
     },
-    null,
   );
   console.log(
     "DONE:",

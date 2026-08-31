@@ -14,7 +14,6 @@ import { parseAIResponse } from "@/app/api/analyze/helpers/json-parser";
 import { buildCacheKey } from "@/app/api/analyze/helpers/diff-utils";
 import { buildContextSnapshot } from "@/app/api/analyze/helpers/context-snapshot";
 import { buildResponse, normalizeAnalysisData } from "@/app/api/analyze/helpers/data-normalizer";
-import { startAnalysisRun, completeAnalysisRun, failAnalysisRun } from "@/lib/analysis-store";
 import {
   ensureNotificationTables,
   ensureReviewTables,
@@ -101,7 +100,6 @@ const ReviewState = Annotation.Root({
   collected: Annotation<CollectedContext | null>,
   model: Annotation<ModelConfig | null>,
   modelProviderName: Annotation<string | null>,
-  runId: Annotation<string | null>,
   startedAt: Annotation<number | null>,
   diffTruncated: Annotation<boolean>,
 
@@ -169,27 +167,10 @@ async function prepare(state: StateT): Promise<Partial<StateT>> {
     const decision = routeModel(routingCtx);
     const model = decision.model;
 
-    let runId: string | null = null;
-    try {
-      const cacheKey = buildCacheKey(state.owner, state.repo, state.prNumber, collected.prInfo.headSha, state.depth);
-      const run = await startAnalysisRun({
-        owner: state.owner,
-        repo: state.repo,
-        defaultBranch: collected.prInfo.baseBranch,
-        cacheKey,
-        depth: state.depth,
-        collected,
-      });
-      runId = run?.id ?? null;
-    } catch (e) {
-      console.warn("[review] startAnalysisRun failed (落库降级):", (e as Error).message);
-    }
-
     return {
       collected,
       model,
       modelProviderName: model.provider,
-      runId,
       startedAt,
       diffTruncated,
       fileChanges: collected.fileChanges,
@@ -423,7 +404,6 @@ async function generate(state: StateT): Promise<Partial<StateT>> {
       state.tokenUsage ?? undefined,
     ),
     {
-      analysisRunId: state.runId ?? undefined,
       analyzedAt: new Date().toISOString(),
       cacheHit: false,
       prUrl: `${state.platform === "gitee" ? "https://gitee.com" : "https://github.com"}/${state.owner}/${state.repo}/pull/${state.prNumber}`,
@@ -431,19 +411,6 @@ async function generate(state: StateT): Promise<Partial<StateT>> {
       contextSnapshot: buildContextSnapshot(collected, state.diffTruncated),
     },
   );
-
-  // 落库（失败不阻塞返回）
-  if (state.runId) {
-    try {
-      await completeAnalysisRun({
-        analysisRunId: state.runId,
-        data: response,
-        contextSnapshot: response.contextSnapshot!,
-      });
-    } catch (e) {
-      console.warn("[review] completeAnalysisRun failed (落库降级):", (e as Error).message);
-    }
-  }
 
   // 持久化到 MySQL（供「审查处理中心」展示与用户决策：批准/评论/采纳/拒绝）
   if (state.userId) {
@@ -809,7 +776,6 @@ export async function runReview(input: RunReviewInput): Promise<RunReviewResult>
     collected: null,
     model: null,
     modelProviderName: null,
-    runId: null,
     startedAt: null,
     diffTruncated: false,
     dimensionResults: {},
@@ -837,18 +803,11 @@ export async function runReview(input: RunReviewInput): Promise<RunReviewResult>
   };
 }
 
-/** 供 webhook / 定时任务使用的兜底：失败时标记 AnalysisRun 失败 */
-export async function runReviewSafe(input: RunReviewInput, runId?: string | null): Promise<RunReviewResult> {
+/** 供 webhook / 定时任务使用的兜底：捕获异常返回错误，不中断 */
+export async function runReviewSafe(input: RunReviewInput): Promise<RunReviewResult> {
   try {
     return await runReview(input);
   } catch (e) {
-    if (runId) {
-      try {
-        await failAnalysisRun({ analysisRunId: runId, errorCode: "REVIEW_ERROR", errorMessage: (e as Error).message });
-      } catch {
-        /* ignore */
-      }
-    }
     return { response: null, error: (e as Error).message, writtenReview: false };
   }
 }

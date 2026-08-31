@@ -1,7 +1,5 @@
 packages:
   - '.'
 allowBuilds:
-  '@prisma/engines': true
   '@tailwindcss/oxide': true
   esbuild: true
-  prisma: true

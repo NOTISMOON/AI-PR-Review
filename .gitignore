@@ -3,6 +3,8 @@ node_modules/
 out/
 dist/
 build/
+.pnpm-store-local/
+.pnpm-local-store/
 
 .env*
 !.env.example
@@ -15,7 +17,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-/src/generated/prisma
+/src/generated
 .claude
 .codegraph/*
 .trae/*
