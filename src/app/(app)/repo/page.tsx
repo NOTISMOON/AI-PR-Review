@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   ChevronRight,
@@ -205,10 +206,23 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("zh-CN");
 }
 
-export default function RepoPage() {
+function RepoPageInner() {
   const { provider, ready } = usePlatform();
   const [repos, setRepos] = useState<{ full_name: string; name: string; status?: string }[]>([]);
-  const [sel, setSel] = useState<{ owner: string; repo: string }>({ owner: "", repo: "" });
+  // urlRef 跟随选中仓库存储：ref 属于来源 URL（初始直链/路由跳转），页面内 replaceState 切换分支
+  // 不会刷新 useSearchParams，直接读 urlRef 会导致“换仓库时误用旧仓库的分支”
+  const [sel, setSel] = useState<{ owner: string; repo: string; urlRef: string }>({
+    owner: "",
+    repo: "",
+    urlRef: "",
+  });
+
+  // 从 URL 查询参数解析目标仓库：同路由仅查询串变化（如侧边栏全局搜索点击仓库）时，
+  // useSearchParams 会更新并触发下游 effect 重新校正选中仓库
+  const searchParams = useSearchParams();
+  const urlOwner = searchParams.get("owner") ?? "";
+  const urlRepo = searchParams.get("repo") ?? "";
+  const urlRef = searchParams.get("ref") ?? "";
 
   const [branches, setBranches] = useState<{ name: string }[]>([]);
   const [defaultBranch, setDefaultBranch] = useState("main");
@@ -252,14 +266,10 @@ export default function RepoPage() {
     [provider],
   );
 
-  // 1) 加载仓库列表，确定默认选中的仓库（支持 ?owner/repo 定位）
+  // 1) 加载仓库列表（下拉框数据源；全量，显式传 pageSize=50 规避 repos 接口默认分页 6 个）
   useEffect(() => {
     if (!ready) return; // 身份未校正前不发平台请求，避免首帧误打错误平台接口产生 401
     let cancelled = false;
-    const q = new URLSearchParams(window.location.search);
-    const qo = q.get("owner");
-    const qr = q.get("repo");
-    // 全量仓库：下拉框需展示所有仓库，显式传 pageSize=50 规避 repos 接口默认分页 6 个
     cachedFetch<{ repos?: any[] }>(`/api/${provider}/repos?pageSize=50`, 30)
       .then((d) => {
         if (cancelled || !d) return;
@@ -271,11 +281,6 @@ export default function RepoPage() {
           }),
         );
         setRepos(list);
-        if (qo && qr) setSel({ owner: qo, repo: qr });
-        else if (list.length) {
-          const [o, n] = list[0].full_name.split("/");
-          setSel({ owner: o, repo: n });
-        }
       })
       .catch(() => {});
     return () => {
@@ -283,16 +288,34 @@ export default function RepoPage() {
     };
   }, [provider, ready]);
 
-  // 2) 选中仓库变化时加载根目录（初始 URL 带 ref 时沿用）
+  // 2) URL 参数（owner/repo/ref）驱动选中仓库：
+  //    - 已在代码浏览页时，侧边栏全局搜索点击仓库属「同路由仅查询串变化」，路由不重新挂载组件，
+  //      必须监听查询参数重新校正选中仓库，否则浏览内容不会更新；
+  //    - URL 无参数时回退到列表首个仓库（与 /repo 直接进入时的行为一致）。
+  useEffect(() => {
+    setSel((prev) => {
+      if (urlOwner && urlRepo) {
+        return prev.owner === urlOwner && prev.repo === urlRepo && prev.urlRef === urlRef
+          ? prev
+          : { owner: urlOwner, repo: urlRepo, urlRef };
+      }
+      if (repos.length) {
+        const [o, n] = repos[0].full_name.split("/");
+        return prev.owner === o && prev.repo === n ? prev : { owner: o, repo: n, urlRef: "" };
+      }
+      return prev;
+    });
+  }, [urlOwner, urlRepo, urlRef, repos]);
+
+  // 3) 选中仓库变化时加载根目录（URL 带 ref 时沿用；ref 与仓库同步随 sel 存储，避免用错旧仓库的分支）
   useEffect(() => {
     if (!sel.owner || !sel.repo) return;
-    const q = new URLSearchParams(window.location.search);
-    loadRoot(sel.owner, sel.repo, q.get("ref") || undefined);
+    loadRoot(sel.owner, sel.repo, sel.urlRef || undefined);
   }, [sel, loadRoot]);
 
   function switchTo(fullName: string) {
     const [o, n] = fullName.split("/");
-    setSel({ owner: o, repo: n });
+    setSel({ owner: o, repo: n, urlRef: "" });
     window.history.replaceState(null, "", `/repo?owner=${encodeURIComponent(o)}&repo=${encodeURIComponent(n)}`);
   }
 
@@ -647,6 +670,15 @@ export default function RepoPage() {
         </div>
       </div>
     </Entrance>
+  );
+}
+
+/** Suspense 包装：useSearchParams 要求静态渲染的页面内必须存在 Suspense 边界 */
+export default function RepoPage() {
+  return (
+    <Suspense fallback={null}>
+      <RepoPageInner />
+    </Suspense>
   );
 }
 
