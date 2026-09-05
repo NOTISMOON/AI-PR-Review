@@ -1,6 +1,6 @@
 /**
- * Language-specific review instructions.
- * Each language has unique pitfalls that the model should check for.
+ * 语言专属的审查指令。
+ * 每种语言都有模型应检查的独特陷阱。
  */
 
 export interface LanguageInstructions {
@@ -98,8 +98,8 @@ export const LANGUAGE_INSTRUCTIONS: Record<string, LanguageInstructions> = {
 };
 
 /**
- * Get language-specific instructions based on file extensions in the PR.
- * Detects the primary language and returns relevant checks.
+ * 根据 PR 中的文件扩展名获取语言专属指令。
+ * 检测主要语言并返回相关检查项。
  */
 export function getInstructionsForFiles(filePaths: string[]): string {
   const langCounts: Record<string, number> = {};
@@ -114,7 +114,7 @@ export function getInstructionsForFiles(filePaths: string[]): string {
     }
   }
 
-  // Get the top 2 languages by file count
+  // 按文件数量取前 2 种语言
   const topLanguages = Object.entries(langCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 2);

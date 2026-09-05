@@ -1,19 +1,16 @@
 /**
- * Full-File Context Extractor — fetches complete file content and extracts
- * the function/class blocks surrounding code changes.
+ * 全文件上下文提取器——抓取完整文件内容，并提取代码变更周边的函数/类代码块。
  *
- * This is the most critical context source: the model currently only sees
- * diff hunks (±3 lines), but needs the full function body to correctly
- * understand the intent and impact of changes.
+ * 这是最关键的上文来源：模型当前只能看到 diff 片段（±3 行），
+ * 但需要完整的函数体才能正确理解变更的意图和影响。
  */
 
 import type { FileChange, FileWithContext, SurroundingBlock } from '@/types/analysis';
 import { fetchFileContent } from '@/lib/github';
 
 /**
- * Extract surrounding function/class context for a set of changed files.
- * Fetches full file contents from GitHub and identifies the code blocks
- * that contain the changes.
+ * 为一组变更文件提取周边的函数/类上下文。
+ * 从 GitHub 抓取完整文件内容，并定位包含变更的代码块。
  */
 export async function extractSurroundingContext(
   owner: string,
@@ -25,7 +22,7 @@ export async function extractSurroundingContext(
   const results: FileWithContext[] = [];
   const changedLineRanges = parseChangedLineRanges(diff);
 
-  // Fetch files in parallel batches of 5 to avoid rate limiting
+  // 每批并行抓取 5 个文件以避免触发速率限制
   const BATCH_SIZE = 5;
   const relevantFiles = fileChanges.filter((f) => f.status !== 'deleted');
 
@@ -43,7 +40,7 @@ export async function extractSurroundingContext(
           if (fullContent && ranges.length > 0) {
             surroundingBlocks = extractCodeBlocks(fullContent, ranges, fc.file);
           } else if (fullContent && fc.status === 'added') {
-            // For new files without explicit ranges, include the entire file
+            // 对于没有明确变更范围的新文件，包含整个文件
             surroundingBlocks = [wrapEntireFile(fullContent, fc.file)];
           }
 
@@ -70,11 +67,11 @@ export async function extractSurroundingContext(
   return results;
 }
 
-// ─── Changed line range parsing ───────────────────────────────────────
+// ─── 变更行范围解析 ───────────────────────────────────────────────────
 
 /**
- * Parse a unified diff to find which lines were changed in each file.
- * Returns a map of file path → list of [startLine, endLine] ranges.
+ * 解析 unified diff，找出每个文件中发生变更的行。
+ * 返回文件路径 → [startLine, endLine] 区间列表的映射。
  */
 function parseChangedLineRanges(diff: string): Map<string, number[][]> {
   const ranges = new Map<string, number[][]>();
@@ -84,9 +81,9 @@ function parseChangedLineRanges(diff: string): Map<string, number[][]> {
   let currentRanges: number[][] = [];
 
   for (const line of lines) {
-    // Detect file header
+    // 检测文件头
     if (line.startsWith('diff --git a/')) {
-      // Save previous file's ranges
+      // 保存上一个文件的变更区间
       if (currentFile && currentRanges.length > 0) {
         ranges.set(currentFile, mergeRanges(currentRanges));
       }
@@ -96,7 +93,7 @@ function parseChangedLineRanges(diff: string): Map<string, number[][]> {
       continue;
     }
 
-    // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+    // 解析 hunk 头：@@ -oldStart,oldCount +newStart,newCount @@
     if (line.startsWith('@@')) {
       const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
       if (match) {
@@ -107,7 +104,7 @@ function parseChangedLineRanges(diff: string): Map<string, number[][]> {
     }
   }
 
-  // Save last file
+  // 保存最后一个文件
   if (currentFile && currentRanges.length > 0) {
     ranges.set(currentFile, mergeRanges(currentRanges));
   }
@@ -115,7 +112,7 @@ function parseChangedLineRanges(diff: string): Map<string, number[][]> {
   return ranges;
 }
 
-/** Merge overlapping or adjacent line ranges */
+/** 合并重叠或相邻的行区间 */
 function mergeRanges(ranges: number[][]): number[][] {
   if (ranges.length === 0) return [];
 
@@ -127,7 +124,7 @@ function mergeRanges(ranges: number[][]): number[][] {
     const current = sorted[i];
 
     if (current[0] <= last[1] + 5) {
-      // Overlapping or within 5 lines — merge
+      // 重叠或在 5 行以内——合并
       last[1] = Math.max(last[1], current[1]);
     } else {
       merged.push(current);
@@ -137,11 +134,11 @@ function mergeRanges(ranges: number[][]): number[][] {
   return merged;
 }
 
-// ─── Code block extraction ────────────────────────────────────────────
+// ─── 代码块提取 ────────────────────────────────────────────────────────
 
 /**
- * Extract function/class/method blocks that contain changed lines.
- * Uses regex heuristics for common languages.
+ * 提取包含变更行的函数/类/方法代码块。
+ * 对常见语言使用正则启发式方法。
  */
 function extractCodeBlocks(
   fullContent: string,
@@ -154,7 +151,7 @@ function extractCodeBlocks(
   const seenLines = new Set<number>();
 
   for (const [start, end] of changedRanges) {
-    // Find the containing block for this range
+    // 查找包含该区间的代码块
     const block = findContainingBlock(lines, start, end, lang);
     if (block && !seenLines.has(block.startLine)) {
       blocks.push(block);
@@ -166,7 +163,7 @@ function extractCodeBlocks(
 }
 
 /**
- * Find the function/class/method that contains a given line range.
+ * 查找包含给定行区间的函数/类/方法。
  */
 function findContainingBlock(
   lines: string[],
@@ -176,7 +173,7 @@ function findContainingBlock(
 ): SurroundingBlock | null {
   const blockStarts = findBlockStarts(lines, lang);
 
-  // Find the block that contains the change range
+  // 查找包含变更区间的代码块
   for (let i = 0; i < blockStarts.length; i++) {
     const block = blockStarts[i];
     const blockEnd = i + 1 < blockStarts.length
@@ -184,10 +181,10 @@ function findContainingBlock(
       : lines.length;
 
     if (changeStart >= block.startLine && changeEnd <= blockEnd) {
-      // This block contains the changes — extract everything from
-      // block start to block end, plus preceding docstring/comment
+      // 该代码块包含变更——提取从
+      // 块起始到块结束的内容，以及前面的 docstring/注释
       let extractStart = block.startLine;
-      // Look backwards for JSDoc/comment block
+      // 向前查找 JSDoc/注释块
       for (let j = block.startLine - 2; j >= 0; j--) {
         const trimmed = lines[j]?.trim() || '';
         if (trimmed.startsWith('/**') || trimmed.startsWith('*') || trimmed.startsWith('*/') ||
@@ -213,7 +210,7 @@ function findContainingBlock(
     }
   }
 
-  // No containing block found — return surrounding context (±15 lines)
+  // 未找到包含的代码块——返回周边上下文（±15 行）
   const contextStart = Math.max(1, changeStart - 15);
   const contextEnd = Math.min(lines.length, changeEnd + 15);
 
@@ -234,7 +231,7 @@ export interface BlockInfo {
 }
 
 /**
- * Detect block starts (function, class, method, interface) for various languages.
+ * 检测各种语言的代码块起始位置（函数、类、方法、interface）。
  */
 export function findBlockStarts(lines: string[], lang: string): BlockInfo[] {
   const blocks: BlockInfo[] = [];
@@ -254,7 +251,7 @@ export function findBlockStarts(lines: string[], lang: string): BlockInfo[] {
           name,
           startLine: i + 1,
         });
-        break; // One pattern per line
+        break; // 每行只匹配一种模式
       }
     }
   }
@@ -325,7 +322,7 @@ function getBlockPatterns(lang: string): BlockPattern[] {
       extractName: (m) => m[1],
     },
     {
-      type: 'class', // Go structs
+      type: 'class', // Go 结构体
       regex: /^type\s+(\w+)\s+struct/,
       extractName: (m) => m[1],
     },
@@ -339,12 +336,12 @@ function getBlockPatterns(lang: string): BlockPattern[] {
       extractName: (m) => m[1],
     },
     {
-      type: 'class', // Rust structs
+      type: 'class', // Rust 结构体
       regex: /^(?:pub\s+)?struct\s+(\w+)/,
       extractName: (m) => m[1],
     },
     {
-      type: 'interface', // Rust traits
+      type: 'interface', // Rust 特性（trait）
       regex: /^(?:pub\s+)?trait\s+(\w+)/,
       extractName: (m) => m[1],
     },
@@ -363,10 +360,10 @@ function getBlockPatterns(lang: string): BlockPattern[] {
     rust: rustPatterns,
   };
 
-  return patternMap[lang] || tsPatterns; // Fallback to TS/JS
+  return patternMap[lang] || tsPatterns; // 回退到 TS/JS
 }
 
-/** Wrap an entire file as a single block (for new files) */
+/** 将整个文件作为一个代码块包装起来（用于新文件） */
 function wrapEntireFile(content: string, filePath: string): SurroundingBlock {
   const lines = content.split('\n');
   return {

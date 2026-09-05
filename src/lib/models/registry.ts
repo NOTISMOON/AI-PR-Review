@@ -1,6 +1,6 @@
 /**
- * Model Registry — defines all available AI models, their capabilities, and costs.
- * Models become "available" only when their respective API keys are configured.
+ * 模型注册表——定义所有可用的 AI 模型、其能力与成本。
+ * 仅当相应的 API key 已配置时，模型才变为“可用”。
  */
 
 import type { ModelConfig } from './types';
@@ -111,27 +111,27 @@ export const MODEL_REGISTRY: Record<string, ModelConfig> = {
 };
 
 /**
- * Get all available models (those with configured API keys).
+ * 获取所有可用的模型（已配置 API key 的模型）。
  */
 export function getAvailableModels(): ModelConfig[] {
   return Object.values(MODEL_REGISTRY).filter((m) => m.available);
 }
 
 /**
- * Get models by tier.
+ * 按层级获取模型。
  */
 export function getModelsByTier(tier: ModelConfig['tier']): ModelConfig[] {
   return getAvailableModels().filter((m) => m.tier === tier);
 }
 
 /**
- * Get the best available model for a given tier, falling back to lower tiers.
+ * 获取指定层级的最佳可用模型，若不可用则回退到较低层级。
  */
 export function getBestAvailableModel(preferredTier?: string): ModelConfig | null {
   const tiers: ModelConfig['tier'][] = ['specialized', 'quality', 'primary', 'fast'];
 
   if (preferredTier) {
-    // Reorder tiers so preferred comes first
+    // 重新排列层级，使首选层级排在最前
     const idx = tiers.indexOf(preferredTier as ModelConfig['tier']);
     if (idx >= 0) {
       tiers.splice(idx, 1);
@@ -142,7 +142,7 @@ export function getBestAvailableModel(preferredTier?: string): ModelConfig | nul
   for (const tier of tiers) {
     const models = getModelsByTier(tier);
     if (models.length > 0) {
-      // Return the first (highest quality) available model in this tier
+      // 返回该层级中第一个（质量最高的）可用模型
       return models[0];
     }
   }
@@ -151,7 +151,7 @@ export function getBestAvailableModel(preferredTier?: string): ModelConfig | nul
 }
 
 /**
- * Get a specific model by ID, if available.
+ * 按 ID 获取指定模型（如果可用）。
  */
 export function getModel(modelId: string): ModelConfig | null {
   const model = MODEL_REGISTRY[modelId];

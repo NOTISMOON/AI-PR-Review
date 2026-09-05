@@ -32,9 +32,9 @@ export interface BrowseData {
   branches: { name: string }[];
   kind: "dir" | "file";
   path: string;
-  /** kind=dir */
+  /** 目录条目列表 */
   entries?: BrowseEntry[];
-  /** kind=file */
+  /** 文件内容 */
   content?: string;
   size?: number;
   /** 文件过大 / 无法解码时置 true，前端展示占位提示 */
@@ -84,7 +84,7 @@ export async function buildBrowse(
           ? await github.getLatestCommit(token, owner, repo, branch)
           : await gitee.getLatestCommit(token, owner, repo, branch);
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   }
 

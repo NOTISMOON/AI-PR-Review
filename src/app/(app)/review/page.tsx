@@ -199,7 +199,7 @@ export default function ReviewPage() {
         }
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     } finally {
       setDetailLoading(false);
     }

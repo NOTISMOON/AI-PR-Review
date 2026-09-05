@@ -1,12 +1,12 @@
 /**
- * Model Router — intelligently selects the best model for a given PR
- * based on size, language, security sensitivity, and user preferences.
+ * 模型路由——根据 PR 的大小、语言、安全敏感度和用户偏好，
+ * 智能地为给定 PR 选择最佳模型。
  */
 
 import type { ModelConfig, RouterDecision, RoutingContext } from './types';
 import { getAvailableModels, getBestAvailableModel, getModelsByTier, getModel } from './registry';
 
-/** Paths that indicate security-sensitive code */
+/** 表示安全敏感代码的路径 */
 const SECURITY_PATH_PATTERNS = [
   /auth/i, /login/i, /signup/i, /register/i,
   /crypto/i, /password/i, /secret/i, /token/i,
@@ -16,7 +16,7 @@ const SECURITY_PATH_PATTERNS = [
   /sql/i, /query/i, /db\//i, /database/i,
 ];
 
-/** File extensions that indicate a particular language */
+/** 表示特定语言的文件扩展名 */
 const LANGUAGE_EXTENSIONS: Record<string, string> = {
   '.ts': 'typescript',
   '.tsx': 'typescript',
@@ -35,7 +35,7 @@ const LANGUAGE_EXTENSIONS: Record<string, string> = {
 };
 
 /**
- * Detect the primary language from file extensions.
+ * 从文件扩展名检测主要语言。
  */
 function detectLanguage(fileList: string[]): string | undefined {
   const counts: Record<string, number> = {};
@@ -59,7 +59,7 @@ function detectLanguage(fileList: string[]): string | undefined {
 }
 
 /**
- * Check if any changed file paths match security-sensitive patterns.
+ * 检查变更文件路径是否匹配安全敏感模式。
  */
 function hasSecuritySensitivePaths(fileList: string[]): boolean {
   return fileList.some((file) =>
@@ -68,7 +68,7 @@ function hasSecuritySensitivePaths(fileList: string[]): boolean {
 }
 
 /**
- * Select the best model for a given PR.
+ * 为给定的 PR 选择最佳模型。
  */
 export function routeModel(ctx: RoutingContext): RouterDecision {
   const available = getAvailableModels();
@@ -80,7 +80,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     );
   }
 
-  // 1. If user explicitly requested a model, use it (if available)
+  // 1. 如果用户明确指定了模型，则使用它（如果可用）
   if (ctx.preferredModel) {
     const model = getModel(ctx.preferredModel);
     if (model) {
@@ -92,11 +92,11 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     }
   }
 
-  // 2. Ensemble mode: use two models from different providers
+  // 2. 集成模式：使用两个来自不同供应商的模型
   if (ctx.ensembleMode && available.length >= 2) {
-    // Pick the best quality model as primary
+    // 选择质量最佳的模型作为主模型
     const primary = getBestAvailableModel('quality') || available[0];
-    // Pick a different provider for secondary
+    // 为副模型选择不同的供应商
     const secondary = available.find((m) => m.provider !== primary.provider) || available[1] || available[0];
 
     return {
@@ -106,7 +106,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     };
   }
 
-  // 3. User preferred tier
+  // 3. 用户偏好层级
   if (ctx.preferredTier) {
     const tierModel = getBestAvailableModel(
       ctx.preferredTier === 'thorough' ? 'quality' : ctx.preferredTier === 'fast' ? 'fast' : 'primary'
@@ -120,7 +120,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     }
   }
 
-  // 4. Very large PR (>200 files) — use strongest available model
+  // 4. 大型 PR（超过 200 个文件）—— 使用可用的最强模型
   if (ctx.fileCount > 200) {
     const best = getBestAvailableModel('specialized') || getBestAvailableModel('quality');
     if (best) {
@@ -132,7 +132,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     }
   }
 
-  // 5. Security-sensitive PR — use quality tier
+  // 5. 安全敏感 PR —— 使用质量层级
   if (ctx.hasSecurityPaths) {
     const best = getBestAvailableModel('quality') || getBestAvailableModel('primary');
     if (best) {
@@ -144,7 +144,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     }
   }
 
-  // 6. Medium PR (50-200 files) — use quality tier if available
+  // 6. 中型 PR（50-200 个文件）—— 如可用则使用质量层级
   if (ctx.fileCount >= 50) {
     const quality = getBestAvailableModel('quality');
     if (quality) {
@@ -156,7 +156,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
     }
   }
 
-  // 7. Default: use primary tier (DeepSeek) or whatever is available
+  // 7. 默认：使用主要层级（DeepSeek）或任何可用的模型
   const defaultModel = getBestAvailableModel('primary') || available[0];
   return {
     model: defaultModel,
@@ -166,7 +166,7 @@ export function routeModel(ctx: RoutingContext): RouterDecision {
 }
 
 /**
- * Build routing context from PR analysis parameters.
+ * 根据 PR 分析参数构建路由上下文。
  */
 export function buildRoutingContext(params: {
   fileCount: number;

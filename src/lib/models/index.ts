@@ -1,6 +1,6 @@
 /**
- * Models module — barrel export.
- * Provides model registry, routing, and provider abstraction for multi-model AI code review.
+ * 模型模块——出口聚合文件。
+ * 为多模型 AI 代码审查提供模型注册表、路由和供应商抽象。
  */
 
 export type {

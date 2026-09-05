@@ -1,6 +1,6 @@
 /**
- * Chain-of-Thought instructions — guides the model through a structured
- * reasoning process before producing the final JSON output.
+ * 思维链（Chain-of-Thought）指令——引导模型在生成最终 JSON 输出之前
+ * 遵循结构化的推理过程。
  */
 
 export const COT_INSTRUCTIONS = `

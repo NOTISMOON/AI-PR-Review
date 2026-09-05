@@ -287,7 +287,7 @@ async function triggerReviewFromWebhook(provider: OAuthProvider, ownerId: number
         return;
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
 
     // 通知规则（webhook 页）：skip_draft / skip_bot / threshold_pause
@@ -319,7 +319,7 @@ async function triggerReviewFromWebhook(provider: OAuthProvider, ownerId: number
         }
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
 
     // 自动回写 review / 设置提交状态（仅 GitHub 支持相关 API）

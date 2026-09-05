@@ -39,7 +39,7 @@ export async function saveRefreshToken(token: string, user: AuthUser, ttlSec: nu
       await c.set(key(token), JSON.stringify(user), "EX", ttlSec);
       return;
     } catch {
-      /* fallthrough to memory */
+      /* 降级到内存 */
     }
   }
   memorySet(token, user, ttlSec);
@@ -53,7 +53,7 @@ export async function getRefreshUser(token: string): Promise<AuthUser | null> {
       const raw = await c.get(key(token));
       if (raw) return JSON.parse(raw) as AuthUser;
     } catch {
-      /* fallthrough */
+      /* 降级处理 */
     }
   }
   return memoryGet(token);
@@ -66,7 +66,7 @@ export async function deleteRefreshToken(token: string): Promise<void> {
     try {
       await c.del(key(token));
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   }
   memoryDel(token);

@@ -1,6 +1,6 @@
 /**
- * Consistency Validator — cross-field consistency checks on AI analysis results.
- * Catches issues that schema validation alone can't detect.
+ * 一致性校验器——对 AI 分析结果进行跨字段一致性检查。
+ * 捕获仅靠 schema 校验无法察觉的问题。
  */
 
 import type { AnalysisOutput, ValidatedRisk } from './schema';
@@ -14,7 +14,7 @@ export interface ConsistencyIssue {
 }
 
 /**
- * Run all consistency checks on the analysis output.
+ * 对分析输出运行所有一致性检查。
  */
 export function checkConsistency(
   output: AnalysisOutput,
@@ -33,7 +33,7 @@ export function checkConsistency(
 }
 
 /**
- * Verify that all referenced files exist in the PR's file change list.
+ * 验证所引用的所有文件均存在于 PR 的文件变更列表中。
  */
 function checkFilesExist(risks: ValidatedRisk[], fileChanges: FileChange[]): ConsistencyIssue[] {
   const changedPaths = new Set(fileChanges.map((f) => f.file));
@@ -52,7 +52,7 @@ function checkFilesExist(risks: ValidatedRisk[], fileChanges: FileChange[]): Con
 }
 
 /**
- * Detect duplicate risks (same file + nearby line + similar title).
+ * 检测重复的风险（相同文件 + 邻近行号 + 相似标题）。
  */
 function checkDuplicates(risks: ValidatedRisk[]): ConsistencyIssue[] {
   const duplicates: { id1: string; id2: string }[] = [];
@@ -63,7 +63,7 @@ function checkDuplicates(risks: ValidatedRisk[]): ConsistencyIssue[] {
       const b = risks[j];
 
       if (a.file === b.file && Math.abs(a.line - b.line) <= 5) {
-        // Check title similarity (simple Jaccard-like overlap)
+        // 检查标题相似度（简单的类 Jaccard 重叠）
         const wordsA = new Set(a.title.toLowerCase().split(/\s+/));
         const wordsB = new Set(b.title.toLowerCase().split(/\s+/));
         const intersection = new Set([...wordsA].filter((w) => wordsB.has(w)));
@@ -89,7 +89,7 @@ function checkDuplicates(risks: ValidatedRisk[]): ConsistencyIssue[] {
 }
 
 /**
- * Check that riskLevel aligns with individual severity scores.
+ * 检查 riskLevel 是否与各条风险的严重程度评分保持一致。
  */
 function checkSeverityRiskLevelAlignment(output: AnalysisOutput): ConsistencyIssue[] {
   const maxSeverity = output.risks.reduce((max, r) => {
@@ -113,7 +113,7 @@ function checkSeverityRiskLevelAlignment(output: AnalysisOutput): ConsistencyIss
 }
 
 /**
- * Check if the number of risks is reasonable for the PR size.
+ * 检查风险数量对于 PR 大小是否合理。
  */
 function checkRiskCountSanity(
   output: AnalysisOutput,
@@ -122,7 +122,7 @@ function checkRiskCountSanity(
 ): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
 
-  // 0 risks on a large diff is suspicious
+  // 大型 diff 上没有任何风险很可疑
   if (output.risks.length === 0 && diffSize > 10000 && fileCount > 10) {
     issues.push({
       type: 'suspicious_risk_count',
@@ -131,7 +131,7 @@ function checkRiskCountSanity(
     });
   }
 
-  // Too many risks on a tiny change is also suspicious
+  // 微小变更上的风险过多同样可疑
   if (output.risks.length > 10 && diffSize < 1000) {
     issues.push({
       type: 'suspicious_risk_count',
@@ -140,7 +140,7 @@ function checkRiskCountSanity(
     });
   }
 
-  // More than 30% critical is miscalibrated
+  // 超过 30% 为 critical 则校准不当
   const criticalCount = output.risks.filter((r) => r.severity === 'critical').length;
   if (criticalCount > output.risks.length * 0.3 && output.risks.length > 3) {
     issues.push({
@@ -154,7 +154,7 @@ function checkRiskCountSanity(
 }
 
 /**
- * Flag high-severity risks with low confidence — these need human review most.
+ * 标记高严重度但置信度低的风险——这些最需要人工复查。
  */
 function checkConfidenceSeverityAlignment(risks: ValidatedRisk[]): ConsistencyIssue[] {
   const highRiskLowConfidence = risks.filter(

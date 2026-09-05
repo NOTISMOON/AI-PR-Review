@@ -1,10 +1,9 @@
 /**
- * Few-shot examples — demonstrate the ideal input-to-output mapping
- * for different scenarios. These are included in the system prompt to
- * calibrate the model's output quality and format.
+ * Few-shot 示例——示范不同场景下理想的 输入→输出 映射。
+ * 这些示例被包含在系统提示词中，用于校准模型的输出质量和格式。
  */
 
-/** Small PR example (2-3 risks, simple changes) */
+/** 小型 PR 示例（2-3 个风险项，简单变更） */
 export const SMALL_PR_EXAMPLE = `
 ## 示例 1：小型 PR 审查
 
@@ -62,7 +61,7 @@ PR 描述: "Fix login form validation — add email format check and prevent emp
   ]
 }`;
 
-/** Large PR example (5-7 risks, complex changes) */
+/** 大型 PR 示例（5-7 个风险项，复杂变更） */
 export const LARGE_PR_EXAMPLE = `
 ## 示例 2：大型 PR 审查
 

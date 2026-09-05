@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     try {
       await cacheDel(settingsCacheKey(r.provider, r.ctx.dbUser.id));
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
 
     const data = await buildWebhookConfig(r.provider, r.ctx.dbUser.id, r.token, origin);

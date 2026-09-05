@@ -1,6 +1,6 @@
 /**
- * Custom provider — supports user-configured OpenAI-compatible endpoints.
- * Used for local models (Ollama, LM Studio) and cloud services with custom configs.
+ * 自定义供应商——支持用户配置的 OpenAI 兼容端点。
+ * 用于本地模型（Ollama、LM Studio）以及使用自定义配置的云服务。
  */
 
 import OpenAI from 'openai';
@@ -18,7 +18,7 @@ export function createCustomProvider(
   function getClient(): OpenAI {
     if (!client) {
       client = new OpenAI({
-        apiKey: apiKey || 'dummy-key', // Some local models don't require API key
+        apiKey: apiKey || 'dummy-key', // 某些本地模型不需要 API key
         baseURL: apiUrl,
       });
     }
@@ -70,7 +70,7 @@ export function createCustomProvider(
         const latencyMs = Date.now() - startTime;
         const content = response.choices[0]?.message?.content || '';
 
-        // If API doesn't return usage, estimate it
+        // 如果 API 未返回 usage，则估算它
         let usage = response.usage
           ? {
               inputTokens: response.usage.prompt_tokens,

@@ -1,5 +1,5 @@
 /**
- * Prompts module — barrel export.
+ * Prompt 模块——桶形导出。
  */
 
 export { BASE_SYSTEM_PROMPT } from './system-base';

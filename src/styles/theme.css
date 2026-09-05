@@ -21,7 +21,7 @@
   --accent: #23262b;
   --accent-foreground: #ece9e2;
 
-  /* ---- Semantic ---- */
+  /* ---- 语义色 ---- */
   --destructive: #ef6e6e;
   --destructive-foreground: #ffffff;
   --border: #292c31;
@@ -39,7 +39,7 @@
   --chart-4: #7fd1e2;
   --chart-5: #ef6e6e;
 
-  /* ---- Sidebar ---- */
+  /* ---- 侧边栏 ---- */
   --sidebar: #17191c;
   --sidebar-foreground: #ece9e2;
   --sidebar-primary: #e8a33d;

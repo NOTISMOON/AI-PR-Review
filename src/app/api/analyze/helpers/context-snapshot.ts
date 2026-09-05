@@ -1,5 +1,5 @@
 /**
- * Helper functions for building context snapshots
+ * 构建上下文快照的辅助函数
  */
 
 import type { CollectedContext, AnalysisContextSnapshotData } from '@/types/analysis';

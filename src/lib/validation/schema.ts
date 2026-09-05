@@ -1,9 +1,9 @@
 /**
- * Validation schemas for AI analysis output.
- * Uses manual validation (no external dependency required).
+ * AI 分析输出的校验 schema。
+ * 使用手动校验（无需外部依赖）。
  */
 
-// ─── Types ────────────────────────────────────────────────────────────
+// ─── 类型 ─────────────────────────────────────────────────────────────
 
 export interface AnalysisOutput {
   summary: string;
@@ -32,7 +32,7 @@ export interface ValidatedReviewComment {
   comment: string;
 }
 
-// ─── Validation ───────────────────────────────────────────────────────
+// ─── 校验 ──────────────────────────────────────────────────────────────
 
 type ValidationResult =
   | { success: true; data: AnalysisOutput }
@@ -45,7 +45,7 @@ const VALID_COMMENT_TYPES = new Set(['positive', 'suggestion', 'concern']);
 const VALID_CATEGORIES = new Set(['security', 'logic', 'performance', 'quality', 'architecture']);
 
 /**
- * Validate AI output against the expected schema.
+ * 根据预期的 schema 校验 AI 输出。
  */
 export function validateAnalysisOutput(raw: unknown): ValidationResult {
   if (!raw || typeof raw !== 'object') {
@@ -55,17 +55,17 @@ export function validateAnalysisOutput(raw: unknown): ValidationResult {
   const obj = raw as Record<string, unknown>;
   const errors: string[] = [];
 
-  // summary — required string
+  // summary —— 必填字符串
   if (typeof obj.summary !== 'string' || obj.summary.length < 10) {
     errors.push('summary: 必须是不少于10字的字符串');
   }
 
-  // riskLevel — required enum
+  // riskLevel —— 必填枚举
   if (typeof obj.riskLevel !== 'string' || !VALID_RISK_LEVELS.has(obj.riskLevel)) {
     errors.push('riskLevel: 必须是 low / medium / high 之一');
   }
 
-  // risks — required array
+  // risks —— 必填数组
   if (!Array.isArray(obj.risks)) {
     errors.push('risks: 必须是数组');
   } else if (obj.risks.length > 15) {
@@ -75,7 +75,7 @@ export function validateAnalysisOutput(raw: unknown): ValidationResult {
     errors.push(...riskErrors);
   }
 
-  // reviewComments — required array
+  // reviewComments —— 必填数组
   if (!Array.isArray(obj.reviewComments)) {
     errors.push('reviewComments: 必须是数组');
   } else if (obj.reviewComments.length === 0) {
@@ -118,12 +118,12 @@ function validateRisks(risks: unknown[]): string[] {
     if (typeof r.code !== 'string' || !r.code) errors.push(`${prefix}.code: 不能为空`);
     if (typeof r.suggestion !== 'string' || !r.suggestion) errors.push(`${prefix}.suggestion: 不能为空`);
 
-    // confidence — default to 'medium' if missing
+    // confidence —— 若缺失则默认为 'medium'
     if (r.confidence !== undefined && (typeof r.confidence !== 'string' || !VALID_CONFIDENCES.has(r.confidence))) {
       errors.push(`${prefix}.confidence: 必须是 high/medium/low 之一`);
     }
 
-    // category — optional but validate if present
+    // category —— 可选，若存在则进行校验
     if (r.category !== undefined && (typeof r.category !== 'string' || !VALID_CATEGORIES.has(r.category))) {
       errors.push(`${prefix}.category: 无效的分类值`);
     }

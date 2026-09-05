@@ -1,16 +1,16 @@
 /**
- * Helper functions for diff processing
+ * diff 处理的辅助函数
  */
 
 /**
- * Smart diff truncation - preserves complete file blocks
+ * 智能 diff 截断 — 保留完整的文件块
  */
 export function truncateDiffSmart(diff: string, maxSize: number): { effectiveDiff: string; diffTruncated: boolean } {
   if (diff.length <= maxSize) {
     return { effectiveDiff: diff, diffTruncated: false };
   }
 
-  // Find the last complete diff block before maxSize
+  // 在 maxSize 之前找到最后一个完整的 diff 文件块
   const lastFileHeader = diff.lastIndexOf('\ndiff --git', maxSize);
 
   if (lastFileHeader > 0) {
@@ -20,7 +20,7 @@ export function truncateDiffSmart(diff: string, maxSize: number): { effectiveDif
     };
   }
 
-  // Fallback: simple truncation
+  // 兜底：简单截断
   return {
     effectiveDiff: diff.slice(0, maxSize) + '\n\n... (truncated)',
     diffTruncated: true,

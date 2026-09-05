@@ -77,7 +77,7 @@ async function scrapeByDay(
         if (key >= startKey && key < endKey) byDay.set(key, (byDay.get(key) || 0) + 1);
       }
     } catch {
-      /* ignore */
+      /* 忽略 */
     }
   };
   // 并发限流：分批执行，降低 Gitee 免费 token 每分钟上限被 429 命中的概率，减少热力图数据遗漏

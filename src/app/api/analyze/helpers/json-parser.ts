@@ -1,5 +1,5 @@
 /**
- * Helper functions for parsing and repairing AI responses
+ * 解析和修复 AI 响应的辅助函数
  */
 
 export function parseAIResponse(textContent: string): unknown {

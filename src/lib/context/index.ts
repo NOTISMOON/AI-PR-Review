@@ -1,5 +1,5 @@
 /**
- * Context module — barrel export.
+ * 上下文模块——桶形导出。
  */
 
 export { collectContext, collectQuickContext, collectStandardContext, collectDeepContext } from './collector';

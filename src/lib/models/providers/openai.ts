@@ -1,5 +1,5 @@
 /**
- * OpenAI provider — supports GPT-4o, GPT-4o-mini, and compatible endpoints.
+ * OpenAI 供应商——支持 GPT-4o、GPT-4o-mini 以及兼容的端点。
  */
 
 import OpenAI from 'openai';

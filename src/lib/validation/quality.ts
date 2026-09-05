@@ -1,6 +1,6 @@
 /**
- * Quality Heuristics — post-analysis quality checks.
- * Detects patterns that suggest issues with the AI output quality.
+ * 质量启发式——分析后的质量检查。
+ * 检测可能表明 AI 输出质量存在问题的模式。
  */
 
 import type { AnalysisOutput, ValidatedRisk, ValidatedReviewComment } from './schema';
@@ -29,22 +29,22 @@ export interface QualityFlag {
 }
 
 /**
- * Evaluate the overall quality of an AI analysis and flag potential issues.
+ * 评估 AI 分析的整体质量并标记潜在问题。
  */
 export function evaluateQuality(output: AnalysisOutput): QualityReport {
   const flags: QualityFlag[] = [];
   const riskQuality = analyzeRiskQuality(output.risks, flags);
   const commentQuality = analyzeCommentQuality(output.reviewComments, flags);
 
-  // Calculate score
-  let score = 70; // Base score
+  // 计算分数
+  let score = 70; // 基础分
 
   if (riskQuality.hasDetailedDescriptions) score += 10;
   if (riskQuality.hasCodeSnippets) score += 5;
   if (commentQuality.hasPositiveComments && commentQuality.hasSuggestionComments) score += 10;
   if (commentQuality.hasConcernComments) score += 5;
 
-  // Deductions for flags
+  // 对标记项进行扣分
   score -= flags.filter((f) => f.severity === 'warning').length * 10;
   score -= flags.filter((f) => f.severity === 'info').length * 3;
 
@@ -86,7 +86,7 @@ function analyzeRiskQuality(risks: ValidatedRisk[], flags: QualityFlag[]) {
     });
   }
 
-  // Check if all risks have the same severity (unlikely for well-calibrated analysis)
+  // 检查所有风险的严重程度是否一致（对于校准良好的分析来说不太可能出现）
   const uniqueSeverities = Object.keys(severityDistribution);
   if (uniqueSeverities.length === 1 && risks.length > 2) {
     flags.push({

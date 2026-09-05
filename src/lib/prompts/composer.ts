@@ -1,6 +1,6 @@
 /**
- * Prompt Composer — assembles the complete system prompt from modular pieces
- * based on PR characteristics (size, language, analysis depth).
+ * Prompt 组合器——根据 PR 特征（大小、语言、分析深度）
+ * 从模块化片段组装出完整的系统提示词。
  */
 
 import { BASE_SYSTEM_PROMPT } from './system-base';
@@ -13,31 +13,31 @@ import { DEEP_MODE_INSTRUCTIONS } from './deep-mode-instructions';
 import type { FileChange } from '@/types/analysis';
 
 export interface PromptConfig {
-  /** Analysis depth: fast (skip examples), standard, or deep (full CoT + examples) */
+  /** 分析深度：fast（跳过示例）、standard 或 deep（完整 CoT + 示例） */
   depth: 'fast' | 'standard' | 'deep';
-  /** File paths for language detection */
+  /** 用于语言检测的文件路径 */
   filePaths: string[];
-  /** Whether to include chain-of-thought instructions */
+  /** 是否包含思维链（chain-of-thought）指令 */
   includeCoT: boolean;
-  /** Whether to include few-shot examples */
+  /** 是否包含 few-shot 示例 */
   includeFewShot: boolean;
-  /** Custom additional instructions */
+  /** 自定义附加指令 */
   customInstructions?: string;
-  /** Whether the diff was truncated */
+  /** diff 是否被截断 */
   diffTruncated: boolean;
 }
 
 /**
- * Compose the full system prompt based on configuration.
+ * 根据配置组合出完整的系统提示词。
  */
 export function composeSystemPrompt(config: PromptConfig): string {
   const parts: string[] = [];
 
-  // 1. Fast mode: ONLY fast mode instructions (override base prompt)
+  // 1. 快速模式：仅使用快速模式指令（覆盖基础提示词）
   if (config.depth === 'fast') {
     parts.push(FAST_MODE_INSTRUCTIONS);
 
-    // Add minimal base rules for JSON format only
+    // 仅添加最简 JSON 格式的基础规则
     parts.push(`
 ## 输出格式（必须遵守）
 
@@ -56,22 +56,22 @@ export function composeSystemPrompt(config: PromptConfig): string {
 - 不要在字符串中使用未转义的换行符（使用 \\n 代替）
 `);
   } else {
-    // 2. Standard/Deep mode: Full base prompt
+    // 2. 标准/深度模式：完整的基础提示词
     parts.push(BASE_SYSTEM_PROMPT);
 
-    // 3. Mode-specific instructions
+    // 3. 模式专属指令
     if (config.depth === 'standard') {
       parts.push(STANDARD_MODE_INSTRUCTIONS);
     } else if (config.depth === 'deep') {
       parts.push(DEEP_MODE_INSTRUCTIONS);
     }
 
-    // 4. Chain-of-Thought (standard + deep)
+    // 4. 思维链（standard + deep）
     if (config.includeCoT) {
       parts.push(COT_INSTRUCTIONS);
     }
 
-    // 5. Language-specific checks
+    // 5. 语言专属检查
     if (config.filePaths.length > 0) {
       const langInstructions = getInstructionsForFiles(config.filePaths);
       if (langInstructions) {
@@ -79,7 +79,7 @@ export function composeSystemPrompt(config: PromptConfig): string {
       }
     }
 
-    // 6. Few-shot examples (standard + deep)
+    // 6. Few-shot 示例（standard + deep）
     if (config.includeFewShot) {
       parts.push(SMALL_PR_EXAMPLE);
       if (config.depth === 'deep') {
@@ -87,13 +87,13 @@ export function composeSystemPrompt(config: PromptConfig): string {
       }
     }
 
-    // 7. Custom instructions (e.g., user-defined rules)
+    // 7. 自定义指令（例如用户定义的规则）
     if (config.customInstructions) {
       parts.push(config.customInstructions);
     }
   }
 
-  // 7. Truncation notice (if applicable)
+  // 7. 截断通知（如适用）
   if (config.diffTruncated) {
     parts.push(`
 ## 注意
@@ -106,7 +106,7 @@ export function composeSystemPrompt(config: PromptConfig): string {
 }
 
 /**
- * Create prompt config based on analysis depth.
+ * 根据分析深度创建 prompt 配置。
  */
 export function createPromptConfig(
   depth: 'fast' | 'standard' | 'deep',

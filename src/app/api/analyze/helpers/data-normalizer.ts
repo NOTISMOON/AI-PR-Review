@@ -1,5 +1,5 @@
 /**
- * Helper functions for normalizing and building analysis data
+ * 规范化与构建分析数据的辅助函数
  */
 
 import type { AnalysisData, AnalysisResponse, Risk, ReviewComment } from '@/types/analysis';

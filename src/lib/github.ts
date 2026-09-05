@@ -6,22 +6,22 @@ export function parsePRUrl(prUrl: string): { owner: string; repo: string; prNumb
 
 const GITHUB_API_BASE = 'https://api.github.com';
 
-// File content cache to avoid duplicate fetches
+// 文件内容缓存，避免重复请求
 const fileContentCache = new Map<string, Promise<string | null>>();
 
-// Store the current GitHub token for this request context
+// 存储当前请求上下文中的 GitHub token
 let currentGitHubToken: string | undefined;
 
 /**
- * Set the GitHub token for the current request context.
- * This should be called at the start of each API request.
+ * 设置当前请求上下文的 GitHub token。
+ * 应在每个 API 请求开始时调用。
  */
 export function setGitHubToken(token: string | undefined) {
   currentGitHubToken = token;
 }
 
 /**
- * Clear the GitHub token after the request is complete.
+ * 请求完成后清除 GitHub token。
  */
 export function clearGitHubToken() {
   currentGitHubToken = undefined;
@@ -33,14 +33,14 @@ function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, s
     'User-Agent': 'ai-pr-review-tool/1.0',
     ...extraHeaders,
   };
-  // Use token from request context only
+  // 仅使用请求上下文中的 token
   if (currentGitHubToken) {
     headers.Authorization = `Bearer ${currentGitHubToken}`;
   }
   return headers;
 }
 
-/** Handle common GitHub API error responses */
+/** 处理常见的 GitHub API 错误响应 */
 function handleGitHubError(res: Response, context: string): never {
   if (res.status === 404) {
     throw Object.assign(new Error(`${context}: Not found`), { code: 'NOT_FOUND', status: 404 });
@@ -57,7 +57,7 @@ function handleGitHubError(res: Response, context: string): never {
   );
 }
 
-// ─── Existing functions (enhanced) ────────────────────────────────────
+// ─── 已有函数（增强版） ────────────────────────────────────
 
 export async function fetchPRInfo(owner: string, repo: string, prNumber: number) {
   const res = await fetch(
@@ -76,11 +76,11 @@ export async function fetchPRInfo(owner: string, repo: string, prNumber: number)
     filesChanged: data.changed_files || 0,
     additions: data.additions || 0,
     deletions: data.deletions || 0,
-    /** PR body/description — NEW */
+    /** PR 正文/描述 — 新增 */
     body: (data.body as string) || '',
-    /** Head commit SHA — for cache keying and file fetching — NEW */
+    /** 头部提交 SHA — 用于缓存键生成与文件获取 — 新增 */
     headSha: (data.head?.sha as string) || '',
-    /** Base branch name — NEW */
+    /** 基础分支名 — 新增 */
     baseBranch: (data.base?.ref as string) || '',
   };
 }
@@ -113,19 +113,18 @@ export async function fetchPRFiles(owner: string, repo: string, prNumber: number
     additions: f.additions,
     deletions: f.deletions,
     status: f.status as 'added' | 'modified' | 'deleted',
-    /** Blob SHA of the file (for full content fetch) — NEW */
+    /** 文件的 Blob SHA（用于获取完整内容）— 新增 */
     blobUrl: (f.blob_url as string) || '',
-    /** Raw URL for the file — NEW */
+    /** 文件的原始 URL — 新增 */
     rawUrl: (f.raw_url as string) || '',
   }));
 }
 
-// ─── NEW: Extended context functions ──────────────────────────────────
+// ─── 新增：扩展的上下文函数 ──────────────────────────────────
 
 /**
- * Fetch commit messages for a PR.
- * Each commit message explains a micro-intent — helps the model understand
- * the logical grouping of changes.
+ * 获取 PR 的提交消息。
+ * 每条提交消息都说明了一个微意图 — 有助于模型理解变更的逻辑分组。
  */
 export async function fetchPRCommits(owner: string, repo: string, prNumber: number): Promise<
   { sha: string; message: string; author: string; date: string }[]
@@ -147,9 +146,9 @@ export async function fetchPRCommits(owner: string, repo: string, prNumber: numb
 }
 
 /**
- * Fetch full file content at a specific Git ref.
- * Used to get surrounding code context beyond the diff hunks.
- * Cached to avoid duplicate requests for the same file.
+ * 获取指定 Git 引用处文件的完整内容。
+ * 用于获取 diff 片段之外的周边代码上下文。
+ * 已做缓存，避免对同一文件的重复请求。
  */
 export async function fetchFileContent(
   owner: string,
@@ -159,12 +158,12 @@ export async function fetchFileContent(
 ): Promise<string | null> {
   const cacheKey = `${owner}/${repo}/${path}@${ref}`;
 
-  // Return cached promise if exists
+  // 若缓存已存在则直接返回缓存的 Promise
   if (fileContentCache.has(cacheKey)) {
     return fileContentCache.get(cacheKey)!;
   }
 
-  // Create and cache the promise
+  // 创建并缓存 Promise
   const fetchPromise = (async () => {
     try {
       const res = await fetch(
@@ -173,13 +172,13 @@ export async function fetchFileContent(
       );
 
       if (!res.ok) {
-        // File might be too large (>1MB) or deleted; gracefully return null
+        // 文件可能过大（>1MB）或已被删除；优雅地返回 null
         if (res.status === 404 || res.status === 403) return null;
         handleGitHubError(res, `Failed to fetch file: ${path}`);
       }
 
       const data = await res.json();
-      // GitHub returns base64-encoded content
+      // GitHub 返回 base64 编码的内容
       if (data.content && data.encoding === 'base64') {
         return Buffer.from(data.content, 'base64').toString('utf-8');
       }
@@ -191,7 +190,7 @@ export async function fetchFileContent(
 
   fileContentCache.set(cacheKey, fetchPromise);
 
-  // Clean up cache after 5 minutes to prevent memory leak
+  // 5 分钟后清理缓存，防止内存泄漏
   setTimeout(() => {
     fileContentCache.delete(cacheKey);
   }, 5 * 60 * 1000);
@@ -200,8 +199,8 @@ export async function fetchFileContent(
 }
 
 /**
- * Fetch repository tree (shallow) to understand project structure.
- * Limited to top 2 levels to keep response manageable.
+ * 获取仓库目录树（浅层），用于了解项目结构。
+ * 限制为前 2 层，以使响应可控。
  */
 export async function fetchRepoTree(
   owner: string,
@@ -218,7 +217,7 @@ export async function fetchRepoTree(
 
     const data = await res.json();
     if (data.truncated) {
-      // Tree is too large; we'll work with what we have
+      // 目录树过大；我们将基于已有数据继续处理
       console.warn('Repository tree is truncated — structure analysis will be partial');
     }
 
@@ -234,7 +233,7 @@ export async function fetchRepoTree(
 }
 
 /**
- * Fetch PR review comments (discussion on the PR).
+ * 获取 PR 评审评论（PR 上的讨论）。
  */
 export async function fetchPRComments(
   owner: string,
@@ -261,7 +260,7 @@ export async function fetchPRComments(
 }
 
 /**
- * Fetch a specific configuration file from the repo (e.g., tsconfig.json, package.json).
+ * 从仓库获取指定的配置文件（例如 tsconfig.json、package.json）。
  */
 export async function fetchConfigFile(
   owner: string,

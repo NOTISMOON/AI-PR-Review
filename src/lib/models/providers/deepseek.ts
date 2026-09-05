@@ -1,6 +1,6 @@
 /**
- * DeepSeek Chat provider — refactored from the original deepseek.ts.
- * Uses OpenAI-compatible SDK with baseURL pointing to api.deepseek.com.
+ * DeepSeek Chat 供应商——从原始的 deepseek.ts 重构而来。
+ * 使用 OpenAI 兼容 SDK，baseURL 指向 api.deepseek.com。
  */
 
 import OpenAI from 'openai';

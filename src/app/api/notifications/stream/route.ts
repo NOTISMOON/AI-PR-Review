@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         try {
           controller.close();
         } catch {
-          /* ignore */
+          /* 忽略 */
         }
       });
     },

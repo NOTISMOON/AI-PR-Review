@@ -104,7 +104,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
           try {
             localStorage.setItem("rf_platform", u.provider);
           } catch {
-            /* ignore */
+            /* 忽略 */
           }
           setProviderState(u.provider);
           // 真实登录用户信息（login/name/avatar），用于侧边栏左下角等展示，替换占位 meta

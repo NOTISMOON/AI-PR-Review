@@ -1,6 +1,6 @@
 /**
- * In-Memory LRU Cache — fast, session-scoped cache for API responses.
- * Uses a Map with TTL-based expiration and LRU eviction.
+ * 内存 LRU 缓存 — 快速、会话级作用域的 API 响应缓存。
+ * 使用带 TTL 过期和 LRU 淘汰机制的 Map。
  */
 
 interface CacheEntry<T> {
@@ -20,7 +20,7 @@ export class MemoryCache<T = unknown> {
   }
 
   /**
-   * Get a cached value. Returns null if not found or expired.
+   * 获取缓存值，未找到或已过期返回 null。
    */
   get(key: string): T | null {
     const entry = this.store.get(key);
@@ -31,16 +31,16 @@ export class MemoryCache<T = unknown> {
       return null;
     }
 
-    // Update last access time for LRU
+    // 更新最近访问时间，用于 LRU 淘汰
     entry.lastAccessed = Date.now();
     return entry.value;
   }
 
   /**
-   * Set a value with optional TTL override.
+   * 设置值，可自定义 TTL 覆盖。
    */
   set(key: string, value: T, ttlMs?: number): void {
-    // Evict if at capacity
+    // 若容量已满则淘汰
     if (this.store.size >= this.maxSize) {
       this.evictLRU();
     }
@@ -53,7 +53,7 @@ export class MemoryCache<T = unknown> {
   }
 
   /**
-   * Check if key exists and is not expired.
+   * 检查键是否存在且未过期。
    */
   has(key: string): boolean {
     const entry = this.store.get(key);
@@ -66,21 +66,21 @@ export class MemoryCache<T = unknown> {
   }
 
   /**
-   * Delete a key.
+   * 删除一个键。
    */
   delete(key: string): void {
     this.store.delete(key);
   }
 
   /**
-   * Clear all entries.
+   * 清空所有条目。
    */
   clear(): void {
     this.store.clear();
   }
 
   /**
-   * Get the number of non-expired entries.
+   * 获取未过期条目的数量。
    */
   get size(): number {
     this.cleanExpired();
@@ -88,7 +88,7 @@ export class MemoryCache<T = unknown> {
   }
 
   /**
-   * Evict the least recently used entry.
+   * 淘汰最近最少使用的条目。
    */
   private evictLRU(): void {
     let oldestKey: string | null = null;
@@ -107,7 +107,7 @@ export class MemoryCache<T = unknown> {
   }
 
   /**
-   * Remove all expired entries.
+   * 移除所有已过期的条目。
    */
   private cleanExpired(): void {
     const now = Date.now();
@@ -119,7 +119,7 @@ export class MemoryCache<T = unknown> {
   }
 }
 
-// ─── Application-specific cache instances ─────────────────────────────
+// ─── 应用特定的缓存实例 ─────────────────────────────
 
-/** Cache for AI analysis results (1 hour TTL, smaller size) */
+/** AI 分析结果缓存（TTL 1 小时，容量较小） */
 export const analysisCache = new MemoryCache<unknown>(50, 60 * 60 * 1000);

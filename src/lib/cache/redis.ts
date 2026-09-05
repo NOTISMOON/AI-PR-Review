@@ -81,7 +81,7 @@ export async function cacheDel(key: string): Promise<void> {
   try {
     await c.del(key);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 
@@ -93,7 +93,7 @@ export async function cacheDelPattern(pattern: string): Promise<void> {
     const keys = await c.keys(pattern);
     if (keys.length) await c.del(...keys);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 
@@ -167,7 +167,7 @@ export async function releaseLock(key: string, token: string): Promise<void> {
   try {
     await c.eval(script, 1, `lock:${key}`, token);
   } catch {
-    /* ignore */
+    /* 忽略 */
   }
 }
 

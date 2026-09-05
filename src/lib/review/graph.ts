@@ -68,7 +68,7 @@ interface DimensionResult {
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 const CONFIDENCES = ["high", "medium", "low"] as const;
 
-// ── State ──
+// ── 状态 ──
 const ReviewState = Annotation.Root({
   // 输入
   owner: Annotation<string>,

@@ -1,12 +1,10 @@
 /**
- * AI-Driven Related File Retrieval (RAG Core)
+ * AI 驱动的相关文件检索（RAG 核心）
  *
- * Uses a lightweight AI model to scan the entire repository file tree
- * and identify files semantically related to the PR changes — files that
- * a human reviewer would want to look at when evaluating the impact.
+ * 使用轻量级 AI 模型扫描整个仓库的文件树，
+ * 找出与 PR 变更在语义上相关的文件——即人类审查者在评估变更影响时想要查看的文件。
  *
- * This mimics what a senior reviewer does: "This change to the token
- * validation function... which middleware calls it? Are the tests updated?"
+ * 这模拟了资深审查者的做法："对 token 校验函数的这个改动……哪个中间件在调用它？测试有更新吗？"
  */
 
 import type { PRInfo, CommitInfo, FileChange, RelatedFile, AIRetrievalResult } from '@/types/analysis';
@@ -15,17 +13,17 @@ import { fetchFileContent } from '@/lib/github';
 import { findBlockStarts } from './full-files';
 
 /**
- * Configuration for the retrieval step.
+ * 检索步骤的配置。
  */
 export interface RelatedFilesConfig {
-  /** Maximum number of related files to return */
+  /** 返回的相关文件最大数量 */
   maxFiles: number;
-  /** Whether to fetch full content for related files */
+  /** 是否抓取相关文件的完整内容 */
   fetchContent: boolean;
-  /** Owner/repo for GitHub API calls */
+  /** GitHub API 调用所需的 owner/repo */
   owner: string;
   repo: string;
-  /** Git ref for file fetching */
+  /** 文件抓取所用的 Git ref */
   headSha: string;
 }
 
@@ -35,9 +33,9 @@ const DEFAULT_CONFIG: Partial<RelatedFilesConfig> = {
 };
 
 /**
- * Main entry point: find related files using AI, then fetch their content.
+ * 主入口：使用 AI 查找相关文件，然后抓取其内容。
  *
- * @returns RelatedFile[] with content populated
+ * @returns 已填充内容的 RelatedFile[]
  */
 export async function findRelatedFiles(
   prInfo: PRInfo,
@@ -46,23 +44,23 @@ export async function findRelatedFiles(
   repoStructure: string[],
   config: RelatedFilesConfig,
 ): Promise<RelatedFile[]> {
-  // Step 1: Build the retrieval prompt
+  // 第 1 步：构建检索提示词
   const prompt = buildRetrievalPrompt(prInfo, changedFiles, commits, repoStructure);
 
-  // Step 2: Call lightweight AI for file selection
+  // 第 2 步：调用轻量级 AI 进行文件选择
   const rawResult = await callRetrievalModel(prompt);
 
   if (!rawResult || rawResult.relatedFiles.length === 0) {
     return [];
   }
 
-  // Step 3: Deduplicate against changed files
+  // 第 3 步：与变更文件去重
   const changedPaths = new Set(changedFiles.map((f) => f.file));
   const uniqueResults = rawResult.relatedFiles
     .filter((f) => !changedPaths.has(f.path))
     .slice(0, config.maxFiles);
 
-  // Step 4: Fetch content for related files (if configured)
+  // 第 4 步：抓取相关文件内容（如已配置）
   if (!config.fetchContent) {
     return uniqueResults.map((r) => ({
       path: r.path,
@@ -84,7 +82,7 @@ export async function findRelatedFiles(
   return withContent;
 }
 
-// ─── Prompt Building ──────────────────────────────────────────────────
+// ─── 构建检索提示词 ──────────────────────────────────────────────────
 
 function buildRetrievalPrompt(
   prInfo: PRInfo,
@@ -101,7 +99,7 @@ function buildRetrievalPrompt(
     .map((c) => `- ${c.message.split('\n')[0].slice(0, 100)}`)
     .join('\n');
 
-  // Truncate repo structure for large repos (> 5000 files)
+  // 对大型仓库（> 5000 个文件）截断仓库结构
   const truncatedTree =
     repoStructure.length > 5000
       ? [
@@ -161,11 +159,11 @@ ${treeStr}
 - 只返回 JSON，不要任何其他文字`;
 }
 
-// ─── AI Call ──────────────────────────────────────────────────────────
+// ─── AI 调用 ──────────────────────────────────────────────────────────
 
 async function callRetrievalModel(prompt: string): Promise<AIRetrievalResult | null> {
   try {
-    // Use the cheapest available model for retrieval
+    // 使用最便宜的可用模型进行检索
     const model = getBestAvailableModel('fast') || getBestAvailableModel('primary');
     if (!model) {
       console.warn('No AI model available for related file retrieval');
@@ -177,7 +175,7 @@ async function callRetrievalModel(prompt: string): Promise<AIRetrievalResult | n
       systemPrompt:
         '你是一个代码架构专家。你的任务是分析 PR 变更，从仓库文件树中找出相关文件。只返回 JSON，不要任何其他内容。',
       userMessage: prompt,
-      temperature: 0, // Deterministic: same PR → same results
+      temperature: 0, // 确定性：相同的 PR → 相同的结果
       maxTokens: 2048,
     });
 
@@ -185,7 +183,7 @@ async function callRetrievalModel(prompt: string): Promise<AIRetrievalResult | n
     return parsed;
   } catch (error) {
     console.error('Related file retrieval failed:', error);
-    return null; // Non-critical — graceful degradation
+    return null; // 非关键——优雅降级
   }
 }
 
@@ -193,12 +191,12 @@ function parseRetrievalResponse(content: string): AIRetrievalResult | null {
   try {
     let jsonStr = content.trim();
 
-    // Strip markdown fences
+    // 去除 markdown 代码围栏
     if (jsonStr.startsWith('```')) {
       jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
 
-    // Extract first JSON object
+    // 提取第一个 JSON 对象
     const firstBrace = jsonStr.indexOf('{');
     const lastBrace = jsonStr.lastIndexOf('}');
     if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -221,12 +219,11 @@ function parseRetrievalResponse(content: string): AIRetrievalResult | null {
   }
 }
 
-// ─── Content Fetching ─────────────────────────────────────────────────
+// ─── 内容抓取 ─────────────────────────────────────────────────────────
 
 /**
- * Fetch full content for AI-identified related files.
- * Extracts only the most relevant code sections using existing function
- * boundary detection, to keep context focused.
+ * 抓取 AI 识别的相关文件的完整内容。
+ * 使用现有的函数边界检测仅提取最相关的代码片段，以保持上下文聚焦。
  */
 async function fetchRelatedFileContents(
   aiResults: { path: string; reason: string; relevance: 'high' | 'medium' | 'low' }[],
@@ -237,7 +234,7 @@ async function fetchRelatedFileContents(
 ): Promise<RelatedFile[]> {
   const changedPaths = new Set(changedFiles.map((f) => f.file));
 
-  // Parallel fetch — batch of 8 to avoid rate limits
+  // 并行抓取——每批 8 个以避免触发速率限制
   const BATCH_SIZE = 8;
   const results: RelatedFile[] = [];
 
@@ -247,13 +244,13 @@ async function fetchRelatedFileContents(
     const batchResults = await Promise.all(
       batch.map(async (item) => {
         try {
-          // Skip if it's actually a changed file (safety check)
+          // 跳过实际为变更文件的内容（安全检查）
           if (changedPaths.has(item.path)) return null;
 
           const content = await fetchFileContent(owner, repo, item.path, headSha);
           if (!content) return null;
 
-          // Extract relevant sections based on the file's role
+          // 根据文件的角色提取相关片段
           const sections = extractRelevantSections(
             content,
             item.path,
@@ -280,15 +277,15 @@ async function fetchRelatedFileContents(
   return results;
 }
 
-// ─── Smart Section Extraction ─────────────────────────────────────────
+// ─── 智能片段提取 ─────────────────────────────────────────────────────
 
 /**
- * Extract the most relevant code sections from a related file.
- * What we extract depends on why the file is related:
- * - Caller: find functions that reference changed symbols
- * - Dependency: find the exported interface/class/functions
- * - Test: find test cases related to changed functions
- * - Config: return relevant config sections
+ * 从相关文件中提取最相关的代码片段。
+ * 提取内容取决于文件为何相关：
+ * - Caller（调用方）：找到引用变更符号的函数
+ * - Dependency（依赖方）：找到导出的 interface/class/函数
+ * - Test（测试）：找到与变更函数相关的测试用例
+ * - Config（配置）：返回相关的配置片段
  */
 function extractRelevantSections(
   content: string,
@@ -299,12 +296,12 @@ function extractRelevantSections(
   const lines = content.split('\n');
   const blocks = findBlockStarts(lines, filePath);
 
-  // Strategy: include all top-level blocks for smaller files (< 200 lines),
-  // but be selective for larger files
+  // 策略：对于较小的文件（< 200 行）包含所有顶层代码块，
+  // 但面对更大的文件则要有所选择
   const isSmallFile = lines.length <= 200;
 
   if (isSmallFile) {
-    // For small files, include everything — it's all relevant context
+    // 小文件包含全部内容——都是相关的上下文
     return blocks.slice(0, 10).map((b) => {
       const endLine = findBlockEnd(lines, b.startLine, b.type);
       return {
@@ -317,7 +314,7 @@ function extractRelevantSections(
     });
   }
 
-  // For larger files, try to find functions that reference changed symbols
+  // 对于更大的文件，尝试找到引用了变更符号的函数
   const changedSymbols = extractChangedSymbols(changedFiles);
   const relevantBlocks = blocks.filter((b) => {
     const blockLines = lines.slice(b.startLine - 1, findBlockEnd(lines, b.startLine, b.type));
@@ -325,7 +322,7 @@ function extractRelevantSections(
     return changedSymbols.some((sym) => blockText.includes(sym));
   });
 
-  // If no symbol matches found, return first 5 blocks as representative
+  // 若未找到匹配的符号，则返回前 5 个代码块作为代表
   const selectedBlocks = relevantBlocks.length > 0
     ? relevantBlocks.slice(0, 8)
     : blocks.slice(0, 5);
@@ -343,8 +340,8 @@ function extractRelevantSections(
 }
 
 /**
- * Heuristic: extract function/class names that were modified in the PR.
- * Used to find references to those symbols in related files.
+ * 启发式方法：提取 PR 中发生改动的函数/类名。
+ * 用于在相关文件中查找对这些符号的引用。
  */
 function extractChangedSymbols(changedFiles: FileChange[]): string[] {
   const symbols: string[] = [];
@@ -353,7 +350,7 @@ function extractChangedSymbols(changedFiles: FileChange[]): string[] {
     const fileName = fc.file.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
     symbols.push(fileName);
 
-    // Also check for common export patterns from the filename
+    // 同时根据文件名检查常见的导出模式
     const camelName = fileName.replace(/[-_](.)/g, (_, c) => c.toUpperCase());
     symbols.push(camelName);
 
@@ -365,13 +362,13 @@ function extractChangedSymbols(changedFiles: FileChange[]): string[] {
 }
 
 /**
- * Find the end line of a code block (matching brace or next block start).
+ * 查找代码块的结束行（匹配的花括号或下一个代码块的起始位置）。
  */
 function findBlockEnd(lines: string[], startLine: number, type: string): number {
-  // Simple heuristic: find the next block start or EOF
-  // For Python-like (indentation-based), look for dedent
+  // 简单启发式：查找下一个代码块的起始位置或文件末尾
+  // 对于类似 Python（基于缩进）的语言，查找缩进回退
   const lang = detectLanguageFromPath('');
-  const isPython = false; // Simplified — could be determined from file extension
+  const isPython = false; // 简化——可根据文件扩展名来确定
 
   let braceDepth = 0;
   let started = false;
@@ -380,21 +377,21 @@ function findBlockEnd(lines: string[], startLine: number, type: string): number 
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Skip comment-only and empty lines
+    // 跳过纯注释行和空行
     if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) continue;
 
-    // Count braces
+    // 统计花括号数量
     for (const ch of trimmed) {
       if (ch === '{') { braceDepth++; started = true; }
       if (ch === '}') { braceDepth--; }
     }
 
-    // If we started and returned to depth 0, we found the end
+    // 若已开始且回到深度 0，即找到结束位置
     if (started && braceDepth === 0 && trimmed.endsWith('}')) {
       return i + 1;
     }
 
-    // If depth was 1 but now 0 on next line
+    // 若深度为 1 但在下一行变为 0
     if (started && braceDepth === 0 && i > startLine - 1) {
       return i + 1;
     }

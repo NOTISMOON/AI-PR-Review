@@ -1,6 +1,6 @@
 /**
- * Anthropic Claude provider — supports Claude Haiku, Sonnet, and Opus models.
- * Uses the Anthropic Messages API directly via fetch (no additional SDK required).
+ * Anthropic Claude 供应商——支持 Claude Haiku、Sonnet 和 Opus 模型。
+ * 通过 fetch 直接使用 Anthropic Messages API（无需额外的 SDK）。
  */
 
 import type { ModelProvider, ModelConfig, ModelAnalysisRequest, ModelAnalysisResult } from '../types';
@@ -17,7 +17,7 @@ function getApiKey(): string {
   return key;
 }
 
-/** Default model to use when provider is selected */
+/** 选择供应商时使用的默认模型 */
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 export const anthropicProvider: ModelProvider = {
@@ -74,7 +74,7 @@ export const anthropicProvider: ModelProvider = {
       const data = await response.json() as any;
       const latencyMs = Date.now() - startTime;
 
-      // Extract text from content blocks
+      // 从内容块中提取文本
       const textBlocks = data.content?.filter((b: any) => b.type === 'text') || [];
       const content = textBlocks.map((b: any) => b.text).join('\n');
 
@@ -169,7 +169,7 @@ export const anthropicProvider: ModelProvider = {
               return;
             }
           } catch {
-            // Skip unparseable chunks
+            // 跳过无法解析的数据块
           }
         }
       }

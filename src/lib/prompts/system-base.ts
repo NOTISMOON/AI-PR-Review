@@ -1,8 +1,8 @@
 /**
- * Base system prompt — defines the core reviewer persona, review criteria,
- * and output format requirements.
+ * 基础系统提示词——定义核心的审查者人设、审查标准
+ * 和输出格式要求。
  *
- * This is the foundation that all other prompt modules build upon.
+ * 这是所有其他 prompt 模块构建的基础。
  */
 
 export const BASE_SYSTEM_PROMPT = `你是一名资深的全栈代码审查专家，具有以下背景：
