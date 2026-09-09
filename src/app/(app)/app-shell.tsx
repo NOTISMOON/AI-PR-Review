@@ -27,9 +27,9 @@ import {
 import { cn } from "@/app/components/ui/utils";
 import { Button } from "@/app/components/ui/button";
 import { usePlatform } from "@/app/components/platform";
+import { useNotifications } from "@/app/components/notifications";
 import { authFetch } from "@/lib/client/auth-fetch";
 import { invalidateCache } from "@/lib/client/data-cache";
-import { toast } from "sonner";
 
 gsap.registerPlugin(useGSAP);
 
@@ -142,46 +142,13 @@ function NotificationPanel() {
     }
   }, []);
 
-  // 初始加载 + SSE 实时推送（多实例经 Redis 广播）+ 兜底轮询（断线保底）
+  // 版本号感知：SSE 由根组件唯一持有，这里只在版本变化时重新拉取；轮询仅作断线兜底
+  const { version, bump } = useNotifications();
   useEffect(() => {
     load();
     const t = setInterval(load, 60000);
-    const es = new EventSource("/api/notifications/stream");
-    es.addEventListener("notification", (e) => {
-      // 收到通知说明服务端数据有更新，局部失效审查任务 / 通知缓存（provider 前缀此处无法得知，故只清通用前缀）
-      invalidateCache("/api/review/tasks");
-      invalidateCache("/api/notifications");
-      load();
-      // 实时 toast 提示（消息带 type/title/link）
-      try {
-        const data = JSON.parse((e as MessageEvent).data) as {
-          type?: string;
-          title?: string;
-          link?: string;
-        };
-        if (data.title) {
-          toast(data.title, {
-            description: data.type === "review_completed" ? "AI 审查已完成，等待处理" : "新通知",
-            action: data.link
-              ? {
-                  label: "查看",
-                  onClick: () => {
-                    window.location.href = data.link!;
-                  },
-                }
-              : undefined,
-          });
-        }
-      } catch {
-        /* 消息解析失败仅刷新 */
-      }
-    });
-    // EventSource 内置断线自动重连；onerror 无需额外逻辑
-    return () => {
-      clearInterval(t);
-      es.close();
-    };
-  }, [load]);
+    return () => clearInterval(t);
+  }, [load, version]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -196,6 +163,7 @@ function NotificationPanel() {
     authFetch(`/api/notifications/${id}/read`, { method: "POST" }).catch(() => {});
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, read: true } : i)));
     setUnread((u) => Math.max(0, u - 1));
+    bump(); // 通知其它消费方（如侧边栏角标）感知未读变化
     if (link) window.location.href = link;
   }
 
@@ -203,6 +171,7 @@ function NotificationPanel() {
     authFetch("/api/notifications", { method: "POST" }).catch(() => {});
     setItems((prev) => prev.map((i) => ({ ...i, read: true })));
     setUnread(0);
+    bump(); // 全部已读后让其它消费方同步未读角标
   }
 
   /** 删除单条通知：后端返回最新未读数，回写角标 */
@@ -215,6 +184,7 @@ function NotificationPanel() {
         setItems((prev) => prev.filter((i) => i.id !== id));
         const d = await res.json().catch(() => null);
         setUnread(typeof d?.unread === "number" ? d.unread : Math.max(0, unread - (removed && !removed.read ? 1 : 0)));
+        bump(); // 删除成功后才通知其它消费方刷新
       }
     } catch {
       /* 删除失败保持原状 */
@@ -411,7 +381,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 刷新时机：路由变化 + 审查决策处理后的自定义事件 + 轮询兜底（保证处理完即更新，不依赖手动导航）
+  // 版本号感知：通知到达时（同一 SSE 链路）侧边栏待审 PR 角标立即刷新
+  const { version: noteVersion } = useNotifications();
+
+  // 刷新时机：路由变化 + 审查决策处理后的自定义事件 + 通知版本变化 + 轮询兜底
   useEffect(() => {
     refreshPending();
     const onJobsChanged = () => {
@@ -425,7 +398,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener("review-jobs-changed", onJobsChanged);
       clearInterval(t);
     };
-  }, [refreshPending, pathname]);
+  }, [refreshPending, pathname, noteVersion]);
 
   // 全局搜索：防抖拉取当前平台匹配仓库 + 仓库内的匹配 PR（按 PR title / PR 号），渲染独立下拉列表
   useEffect(() => {

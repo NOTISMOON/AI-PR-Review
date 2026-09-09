@@ -26,7 +26,7 @@ export interface CollectionOptions {
   includeLanguageConfigs: boolean;
   /** 抓取完整内容的最大文件数 */
   maxFullFiles: number;
-  /** 是否使用 AI 从仓库中查找相关文件（RAG） */
+  /** 是否使用 AI 从仓库中查找相关文件（LLM 语义检索） */
   includeRelatedFiles: boolean;
   /** 要检索的相关文件最大数量 */
   maxRelatedFiles: number;
@@ -91,10 +91,10 @@ export async function collectContext(
   // 此处不再做硬编码正则构建（耗时且不通用）。
   let dependencyGraph: DependencyGraph | null = null;
 
-  // ═══ 阶段 5：AI 驱动的相关文件检索（RAG）★ 新增 ═══
+  // ═══ 阶段 5：AI 驱动的相关文件检索（LLM 语义检索，非向量检索） ═══
   let relatedFiles: RelatedFile[] = [];
   if (opts.includeRelatedFiles && repoStructure.length > 0 && prInfo.headSha) {
-    console.log(`[RAG] Finding related files in ${repoStructure.length} repo files...`);
+    console.log(`[retrieve] Finding related files in ${repoStructure.length} repo files...`);
     try {
       relatedFiles = await findRelatedFiles(
         prInfo,
@@ -109,9 +109,9 @@ export async function collectContext(
           headSha: prInfo.headSha,
         },
       );
-      console.log(`[RAG] Found ${relatedFiles.length} related files.`);
+      console.log(`[retrieve] Found ${relatedFiles.length} related files.`);
     } catch (error) {
-      console.warn('[RAG] Related file retrieval failed, continuing without:', error);
+      console.warn('[retrieve] Related file retrieval failed, continuing without:', error);
       relatedFiles = []; // 优雅降级
     }
   }
